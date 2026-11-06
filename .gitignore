@@ -1,0 +1,30 @@
+# Python 运行产物
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# 本地数据、密钥和日志
+records/
+填写密钥.txt
+.env
+.env.*
+*.log
+
+# 旧版本备份和本地截图
+backup_*/
+*.png
+*.jpg
+*.jpeg
+
+# 编辑器/系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 前端测试临时目录
+node_modules/
+.pwtest/
