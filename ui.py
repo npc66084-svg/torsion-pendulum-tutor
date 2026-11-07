@@ -93,8 +93,97 @@ PAGE_JS = """
     };
     let returnFocus = null;
     let wasOpen = false;
+    const makeResizable = (dock) => {
+      if (!dock || dock.__edgeResize || window.innerWidth <= 860) return;
+      dock.__edgeResize = true;
+      const EDGE = 8, MIN_W = 320, MIN_H = 400;
+      let drag = null;
+      const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+      const cursorFor = (hit) => {
+        if ((hit.left && hit.top) || (hit.right && hit.bottom)) return 'nwse-resize';
+        if ((hit.right && hit.top) || (hit.left && hit.bottom)) return 'nesw-resize';
+        if (hit.left || hit.right) return 'ew-resize';
+        return 'ns-resize';
+      };
+      const atEdge = (event) => {
+        const rect = dock.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const hit = {
+          left: x <= EDGE,
+          right: x >= rect.width - EDGE,
+          top: y <= EDGE,
+          bottom: y >= rect.height - EDGE,
+        };
+        return (hit.left || hit.right || hit.top || hit.bottom) ? hit : null;
+      };
+      const onPointerMove = (event) => {
+        if (drag) return;
+        const hit = atEdge(event);
+        dock.style.cursor = hit ? cursorFor(hit) : '';
+        dock.classList.toggle('tutor-resize-hover', !!hit);
+      };
+      const onPointerDown = (event) => {
+        if (event.button !== 0 || window.innerWidth <= 860) return;
+        const hit = atEdge(event);
+        if (!hit) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = dock.getBoundingClientRect();
+        drag = {
+          hit, startX: event.clientX, startY: event.clientY,
+          width: rect.width, height: rect.height, top: rect.top,
+        };
+        dock.classList.add('tutor-resizing');
+        dock.style.cursor = cursorFor(hit);
+        document.body.style.userSelect = 'none';
+        window.addEventListener('pointermove', onPointerDrag, true);
+        window.addEventListener('pointerup', stopDrag, true);
+      };
+      const onPointerDrag = (event) => {
+        if (!drag) return;
+        event.preventDefault();
+        const dx = event.clientX - drag.startX;
+        const dy = event.clientY - drag.startY;
+        const maxW = Math.max(MIN_W, window.innerWidth - 24);
+        const maxH = Math.max(MIN_H, window.innerHeight - 24);
+        let width = drag.width;
+        let height = drag.height;
+        let top = drag.top;
+        if (drag.hit.left) width = clamp(drag.width - dx, MIN_W, maxW);
+        else if (drag.hit.right) width = clamp(drag.width + dx, MIN_W, maxW);
+        if (drag.hit.top) {
+          height = clamp(drag.height - dy, MIN_H, maxH);
+          top = clamp(drag.top + (drag.height - height), 12,
+                      Math.max(12, window.innerHeight - 12 - height));
+        } else if (drag.hit.bottom) {
+          height = clamp(drag.height + dy, MIN_H, maxH);
+        }
+        dock.style.width = width + 'px';
+        dock.style.height = height + 'px';
+        if (drag.hit.top) dock.style.top = top + 'px';
+      };
+      const stopDrag = () => {
+        if (!drag) return;
+        drag = null;
+        dock.classList.remove('tutor-resizing');
+        dock.style.cursor = '';
+        document.body.style.userSelect = '';
+        window.removeEventListener('pointermove', onPointerDrag, true);
+        window.removeEventListener('pointerup', stopDrag, true);
+      };
+      dock.addEventListener('pointermove', onPointerMove);
+      dock.addEventListener('pointerdown', onPointerDown, true);
+      dock.addEventListener('pointerleave', () => {
+        if (!drag) {
+          dock.style.cursor = '';
+          dock.classList.remove('tutor-resize-hover');
+        }
+      });
+    };
     const watch = new MutationObserver(() => {
       const dock = document.getElementById('tutor-dock');
+      if (dock) makeResizable(dock);
       const open = !!(dock && dock.classList.contains('tutor-open') && shown(dock));
       document.body.classList.toggle('tutor-open-page', open);
       if (open && !wasOpen) {
@@ -118,6 +207,7 @@ PAGE_JS = """
     const arm = () => {
       const dock = document.getElementById('tutor-dock');
       if (!dock) { setTimeout(arm, 300); return; }
+      makeResizable(dock);
       watch.observe(dock, {attributes: true, attributeFilter: ['class', 'style']});
     };
     arm();
@@ -458,12 +548,27 @@ header.lab-head .chips span {
     box-shadow: 0 12px 30px rgba(27, 58, 75, 0.22); border-radius: 999px !important;
 }
 #tutor-dock, #tutor-dock.tutor-open {
-    position: fixed !important; top: 12px; right: 12px; bottom: 12px;
-    left: auto !important; width: min(410px, calc(100vw - 24px)) !important;
-    max-width: 410px !important; height: auto !important; max-height: none !important;
+    position: fixed !important; top: 12px; right: 12px; bottom: auto;
+    left: auto !important; width: min(410px, calc(100vw - 24px));
+    min-width: 320px; max-width: calc(100vw - 24px);
+    height: min(760px, calc(100vh - 24px)); min-height: 400px;
+    max-height: calc(100vh - 24px);
     z-index: 50; margin: 0 !important; overflow: auto;
+    display: flex !important; flex-direction: column !important;
+    align-items: stretch !important; gap: 8px;
+    resize: none; box-sizing: border-box;
     background: #fffdf8 !important; border: 1px solid #e4d9cc; border-radius: 18px;
     padding: 10px 14px 14px; box-shadow: 0 24px 60px rgba(48, 36, 24, 0.24);
+}
+#tutor-dock > .wrap.hide { display: none !important; }
+#tutor-dock #tutor-head { flex: 0 0 auto; width: 100% !important; }
+#tutor-dock #tutor-chat { flex: 1 1 0 !important; width: 100% !important;
+    min-height: 240px !important; height: auto !important; }
+#tutor-dock #tutor-chat .bubble-wrap { height: 100% !important; }
+#tutor-dock.tutor-resize-hover { border-color: #1f6f6a !important; }
+#tutor-dock.tutor-resizing {
+    border-color: #1f6f6a !important;
+    box-shadow: 0 24px 60px rgba(48, 36, 24, 0.32);
 }
 #tutor-head { align-items: center; gap: 8px; }
 #tutor-head .prose { flex: 1; }
@@ -512,7 +617,9 @@ body:has(#tutor-dock.tutor-open) #stage-select label { font-size: 14px; padding:
     body:has(#tutor-dock.tutor-open) .gradio-container { padding-right: 0 !important; }
     #tutor-dock.tutor-open {
         inset: 0 !important; z-index: 80 !important; width: 100% !important;
-        max-width: none !important; height: 100% !important; border-radius: 0;
+        max-width: none !important; height: 100% !important; min-width: 0 !important;
+        min-height: 0 !important; max-height: none !important;
+        border-radius: 0; resize: none !important;
         padding: 12px 12px 28px !important; box-sizing: border-box;
     }
     .lab-head h1 { font-size: 27px; }
@@ -1000,10 +1107,12 @@ def build_ui(handle, get_view_state):
 
             with gr.Column(visible=False, scale=0, min_width=0, elem_id="tutor-dock") as tutor_dock:
                 with gr.Row(elem_id="tutor-head"):
-                    md("### 实验助教\n\n选中页面文字会填进这里；发送前可以改。")
+                    md("### 实验助教\n\n选中页面文字会填进这里；发送前可以改。可拖动四边或角调整大小。")
                     tutor_close = gr.Button("收起", elem_id="tutor-close")
                 chat = gr.Chatbot(
-                    label="实验助教", height=420, allow_tags=False,
+                    label="实验助教", height="100%", min_height=240,
+                    group_consecutive_messages=False, layout="bubble",
+                    elem_id="tutor-chat", allow_tags=False,
                     latex_delimiters=[
                         {"left": "$$", "right": "$$", "display": True},
                         {"left": "\\[", "right": "\\]", "display": True},

@@ -172,6 +172,10 @@ def main():
     assert {"left": "\\(", "right": "\\)", "display": False} in controls["chat"].latex_delimiters
     assert {"left": "\\[", "right": "\\]", "display": True} in controls["chat"].latex_delimiters
     assert {"left": "$$", "right": "$$", "display": True} in controls["chat"].latex_delimiters
+    assert controls["chat"].group_consecutive_messages is False
+    assert controls["chat"].layout == "bubble"
+    assert "resize: none" in ui.CSS and "#tutor-dock" in ui.CSS
+    assert "makeResizable" in ui.PAGE_JS and "tutor-resizing" in ui.CSS
     initial = app.get_view_state()
     assert initial["can_start"] and not initial["can_run"]
     assert initial["mode"] == "real" and initial["exp_stage"] == "params"
