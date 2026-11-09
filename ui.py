@@ -836,9 +836,12 @@ def build_ui(handle, get_view_state):
                                                      info="量较长尺寸时使用。", scale=1)
 
                         param_fields = {}
-                        for object_key, name, fields in experiment.OBJECT_FIELDS:
-                            with gr.Column(elem_classes=["card"]):
-                                md(f"### {name}")
+                        with gr.Column(elem_classes=["card"]):
+                            md("### 器材参数")
+                            md("同一只器材的重复读数写在同一格里；这次没用到的器材可以留空，"
+                               "缺项会在参数预览里标出。")
+                            for object_key, name, fields in experiment.OBJECT_FIELDS:
+                                md(f"**{name}**")
                                 with gr.Row():
                                     for field_key, label, unit, example, info in fields:
                                         key = experiment.ui_key(object_key, field_key)
