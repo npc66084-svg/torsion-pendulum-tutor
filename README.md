@@ -1,5 +1,7 @@
 # 扭摆法测转动惯量 · 双模式实验助教
 
+[![tests](https://github.com/npc66084-svg/torsion-pendulum-tutor/actions/workflows/ci.yml/badge.svg)](https://github.com/npc66084-svg/torsion-pendulum-tutor/actions/workflows/ci.yml)
+
 一个面向大学物理实验的 Gradio 教学程序：学生可以用**真实实验模式**记录自己的器材参数和测量数据，也可以用**虚拟实验模式**点击生成周期数据；程序负责不确定度、有效数字、图像和本地核对，AI 负责解释检查结果、批改概念题和起草实验报告。
 
 ## 文档
@@ -18,8 +20,8 @@
 - **阶段1 标定**：空盘和加圆柱的总时间，不限组数；学生填 \(I_1\)、\(K\)、\(I_0\)。
 - **阶段2 规则刚体**：圆筒、球体、细杆的 \(I_{\text{实验}}\)、\(I_{\text{几何}}\) 和百分偏差。
 - **阶段3 平行轴**：细杆、五个对称距离、四组不对称；学生填 \(I_{\text{总}}\)、斜率和截距。
-- **阶段4 图表与报告**：生成阶段2/3图表；AI 按标准实验报告结构起草报告。
-- **不确定度**：A/B 类、合成、传播、有效数字和 \(k=2\) 扩展不确定度由本地程序计算。
+- **阶段4 图表与报告**：生成阶段2/3图表；AI 按标准实验报告结构起草报告；可导出原始数据 CSV 和 Word 报告（.docx）。
+- **不确定度**：A/B 类、合成、传播和有效数字由本地程序计算，界面给出合成标准不确定度 \(u_c\)（k=1）；报告若要求扩展不确定度，取 \(U=2u_c\)。
 - **本地核对 + AI 解释分离**：「核对结果（本地）」立即出结果；需要时再点「请 AI 解释」。
 - **回答批改**：阶段2/3 概念题可点「请 AI 批改回答」，逐题给出判断和补充提示。
 - **演示数据**：开始页「载入完整演示数据」会填好参数、周期、学生计算和回答，方便只验收按钮和图表。
@@ -29,12 +31,14 @@
 ## 快速开始
 
 ```powershell
-cd D:\single_slit_tutor\single_slit_tutor
+cd <项目目录>
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe app.py
 ```
+
+代码不依赖本地目录名；GitHub 仓库为 `torsion-pendulum-tutor`。
 
 浏览器打开 `http://127.0.0.1:7860`。Windows 也可以双击 `启动.bat`。
 
@@ -48,7 +52,8 @@ ui.py                  页面布局、控件和事件绑定
 experiment.py          模式、阶段、阶段0参数版本、虚拟器材参数
 stages.py              阶段1～3 测量组、结果表、检查、作废和问题
 uncertainty.py         A/B 类不确定度、传播、有效数字、线性回归
-charts.py              阶段2/3/4 图表
+charts.py              阶段2/3/4 图表（误差棒、残差）
+report_docx.py         导出 Word 实验报告（表格 + 图）
 tutor.py               AI 助教、检查解释、回答批改、实验报告草稿
 tasks.py               旧版教学任务与工具
 torsion.py             扭摆/周期/器材计算
@@ -56,12 +61,28 @@ lab_records.py         旧版虚拟与实验室记录
 session_store.py       会话 JSON 保存与事件
 visuals.py             页面视觉组件
 knowledge/             教学资料
-tests/smoke_check.py   回归测试
+tests/smoke_check.py   端到端回归测试
+tests/test_uncertainty.py  单元测试（不确定度、标定、回归、出图）
 SKILL.md               AI 助教教学约定
 docs/                  整合后的项目文档
+pyproject.toml         pytest/ruff 配置
 requirements.txt       Python 依赖
+requirements-dev.txt   测试依赖（pytest）
+requirements-lock.txt  本机验证过的完整版本（可选，便于复现）
+.github/workflows/     CI：单元测试 + 冒烟测试
+LICENSE                MIT
 启动.bat               Windows 启动脚本
 ```
+
+## 测试
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest tests\test_uncertainty.py -q
+.\.venv\Scripts\python.exe tests\smoke_check.py
+```
+
+CI 配置在 `.github/workflows/ci.yml`，推送到 GitHub 后会自动跑这两组测试。
 
 ## 数据与隐私
 
@@ -72,8 +93,8 @@ requirements.txt       Python 依赖
 
 ## 状态
 
-当前功能已覆盖真实/虚拟模式、阶段0～4、不确定度、AI 检查/回答批改/报告草稿、演示数据和四边可调助教浮窗。已知限制见[开发记录](docs/开发记录.md)。
+当前功能已覆盖真实/虚拟模式、阶段0～4、不确定度、AI 检查/回答批改/报告草稿、演示数据、CSV 导出、Word 报告导出和四边可调助教浮窗。已知限制见[开发记录](docs/开发记录.md)。
 
 ## 许可证
 
-当前未附带开源许可证。若计划公开仓库，请根据使用范围选择 MIT、Apache-2.0 或其他许可证后再添加 `LICENSE` 文件。
+MIT，见 [LICENSE](LICENSE)。

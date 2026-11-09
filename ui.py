@@ -722,6 +722,12 @@ def render_view(state, controls):
         controls["save_par_answers"]: gr.update(interactive=ready),
         controls["summary_panel"]: gr.update(visible=active and state["summary_panel_visible"]),
         controls["summary_table_md"]: state["summary_table_md"],
+        controls["export_csv"]: gr.update(interactive=ready),
+        controls["csv_file"]: gr.update(value=state.get("csv_path"),
+                                        visible=bool(state.get("csv_path"))),
+        controls["export_docx"]: gr.update(interactive=ready),
+        controls["docx_file"]: gr.update(value=state.get("docx_path"),
+                                         visible=bool(state.get("docx_path"))),
         controls["summary_text"]: state["summary_text"],
         controls["summary_shapes_plot"]: gr.update(
             value=state["summary_shapes_figure"],
@@ -900,10 +906,12 @@ def build_ui(handle, get_view_state):
                                    elem_id="cal-virtual") as cal_virtual:
                         md("### 虚拟标定数据")
                         virt_cal_generate = gr.Button("生成一组标定数据", variant="primary")
-                        md("虚拟模式使用固定器材参数；点击生成一组空盘和加圆柱的总时间。")
+                        md("标定固定用这只塑料圆柱，I₁ 各组共用。每点一次生成一组独立计时，"
+                           "周期带随机起伏；连点 2～5 次得到多组，程序用多组算平均值和 A 类不确定度。")
                     with gr.Column(elem_classes=["card"]):
                         md("### 已记录的标定组")
                         cal_groups_md = md("", elem_id="cal-groups-md")
+                        md("表里是每组自己的总时间和周期；下面的「当前标定预览」是多组平均。")
                         cal_group_pick = gr.Dropdown(
                             choices=[], value=None, label="选择要作废的组",
                             info="作废的组保留在表里，不再参与平均。")
@@ -1087,6 +1095,18 @@ def build_ui(handle, get_view_state):
                     with gr.Column(elem_classes=["card"]):
                         md("### 当前记录")
                         summary_table_md = md("")
+                        with gr.Row():
+                            export_csv = gr.Button("生成原始数据 CSV", variant="secondary")
+                            md("生成后点下面的文件名下载；含阶段1～3 每组的总时间和周期。",
+                               elem_id="csv-note")
+                        csv_file = gr.File(label="原始数据 CSV", file_count="single",
+                                           interactive=False, visible=False)
+                        with gr.Row():
+                            export_docx = gr.Button("导出实验报告 .docx", variant="primary")
+                            md("含参数、数据表、结果和两张图；讨论与结论留空，自己写。",
+                               elem_id="docx-note")
+                        docx_file = gr.File(label="实验报告 .docx", file_count="single",
+                                            interactive=False, visible=False)
                     with gr.Column(elem_classes=["card"]):
                         md("### 阶段2：I实验 / I几何")
                         summary_shapes_plot = gr.Plot(label="阶段2 I实验 / I几何")
@@ -1183,6 +1203,8 @@ def build_ui(handle, get_view_state):
             "par_condition": par_condition, "par_n": par_n, "par_times": par_times,
             "par_note": par_note,
             "summary_panel": summary_panel, "summary_table_md": summary_table_md,
+            "export_csv": export_csv, "csv_file": csv_file,
+            "export_docx": export_docx, "docx_file": docx_file,
             "summary_text": summary_text, "summary_shapes_plot": summary_shapes_plot,
             "summary_parallel_plot": summary_parallel_plot,
             "generate_summary": generate_summary,
@@ -1224,6 +1246,7 @@ def build_ui(handle, get_view_state):
             par_manual, par_virtual, virt_par_generate, par_group_pick,
             summary_panel, summary_table_md, summary_text, summary_shapes_plot,
             summary_parallel_plot, generate_summary,
+            export_csv, csv_file, export_docx, docx_file,
             draw_summary, summary_chart_note,
             later_panel, stage_placeholder, save_param, load_param,
             version_pick, param_active_md, param_versions_md, param_preview_md,
@@ -1291,6 +1314,8 @@ def build_ui(handle, get_view_state):
             (draw_par, "draw_par"),
             (virt_par_generate, "virt_par_group"),
             (generate_summary, "generate_summary"),
+            (export_csv, "export_csv"),
+            (export_docx, "export_docx"),
             (draw_summary, "draw_summary"),
             (tutor_launch, "open_tutor"),
             (tutor_close, "close_tutor"), (ask, "ask"), (hint, "hint"),

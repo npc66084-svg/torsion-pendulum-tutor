@@ -13,6 +13,17 @@ def now():
     return datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds")
 
 
+def _versions(names):
+    """装了哪些就记哪些；缺包时写“未安装”，不能因为缺包而无法开始学习。"""
+    found = {}
+    for name in names:
+        try:
+            found[name] = version(name)
+        except Exception:
+            found[name] = "未安装"
+    return found
+
+
 def create_session(student_id, root, model):
     student_id = str(student_id).strip()
     if not re.fullmatch(r"[0-9]{1,24}", student_id):
@@ -25,7 +36,8 @@ def create_session(student_id, root, model):
     session = dict(student_id=student_id, session_id=session_id,
                    started_at=started, updated_at=started, schema_version="1.2",
                    model=model, material_versions=hashes,
-                   software={p: version(p) for p in ["numpy", "scipy", "matplotlib", "gradio", "openai"]},
+                   software=_versions(["numpy", "matplotlib", "gradio", "openai",
+                                       "python-docx"]),
                    task_id="calibrate", stage="predict", prediction="", hint_count=0,
                    current_experiment_id=None, explanation_submitted=False, summary_submitted=False,
                    data_origin="virtual",

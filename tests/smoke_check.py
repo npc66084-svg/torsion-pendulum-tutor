@@ -21,6 +21,7 @@ for _name in ("NO_PROXY", "no_proxy"):
             part.strip() for part in _raw.split(",") if part.strip() and part.strip() != "[::1]")
 import numpy as np
 import gradio as gr
+import docx
 import tutor
 from torsion import (measure_period, plot_swing, plot_distance_trend, result_text, result_details,
                      assess_student_value, with_repeats, inertia_of, cylinder_inertia, tube_inertia,
@@ -150,7 +151,7 @@ def main():
     assert len({item["case_id"] for item in CASES}) == 15
     print("PASS: 周期标定、平行轴差值、核对与绘图")
 
-    nb = json.loads((ROOT / "single_slit_tutor.ipynb").read_text(encoding="utf-8"))
+    nb = json.loads((ROOT / "torsion_pendulum_tutor.ipynb").read_text(encoding="utf-8"))
     cells = [c for c in nb["cells"] if "".join(c["source"]).strip()]
     assert len(cells) == 1 and cells[0]["cell_type"] == "code"
     import app
@@ -586,6 +587,21 @@ def main():
             assert {"param_save", "param_load", "param_use",
                     "mode_change", "stage_change"} <= {
                 event["type"] for event in session["records"]}
+            probe = exp_mod.blank_state()
+            exp_mod.set_mode(probe, "real")
+            probe_form = exp_mod.blank_form()
+            probe_form.update(p_cylinder_mass="620.0",
+                              p_cylinder_diameter="99.98, 100.02, 100.00")
+            probe_param = exp_mod.form_to_param(probe_form)
+            exp_mod.add_version(probe, "real", probe_param)
+            probe_group = stage_mod.add_calibration_group(
+                probe, "real", 10, "7.695", "12.443")
+            assert probe_group["param_label"] == "v1"
+            assert "注意" not in stage_mod.groups_md(probe, "real", "calibrate")
+            exp_mod.add_version(probe, "real", probe_param)
+            assert "统一按" in stage_mod.param_change_note(probe, "real")
+            probe_table = stage_mod.groups_md(probe, "real", "calibrate")
+            assert "注意" in probe_table and "v1" in probe_table
             print("PASS: 双模式、阶段0参数版本、载入/采用、虚拟只读")
 
             active_param = exp_mod.active_param(session["experiment"], "real")
@@ -607,6 +623,8 @@ def main():
                                         ("rod", "rod")):
                 times = measure_period(assembly, 10, 0, noise_std=0)["summary"]["total_time_s"]
                 call("add_shp_group", shp_condition=condition, shp_n="10", shp_times=str(times))
+            shape_groups_md = stage_mod.groups_md(session["experiment"], "real", "shapes")
+            assert "T / s" in shape_groups_md and shape_groups_md.count("| 第 ") == 3
             shape_rows = []
             for condition in stage_mod.SHAPE_CONDITIONS:
                 estimate = stage_mod.shape_estimate(
@@ -639,6 +657,8 @@ def main():
                                        noise_std=0)["summary"]["total_time_s"]
                 call("add_par_group", par_condition=condition, par_n="10",
                      par_times=str(times))
+            par_groups_md = stage_mod.groups_md(session["experiment"], "real", "parallel")
+            assert "T / s" in par_groups_md and par_groups_md.count("| 第 ") == 10
             parallel_rows = []
             for condition, label in stage_mod.parallel_conditions():
                 estimate = stage_mod.parallel_estimate(
@@ -660,6 +680,18 @@ def main():
             with patch.dict(os.environ, {"TUTOR_MODEL": "", "OPENAI_API_KEY": ""}, clear=False):
                 answer_view = call("review_par_answers")
             assert "AI 尚未配置" in answer_view["par_answers_feedback"]
+            csv_view = call("export_csv")
+            csv_path = Path(csv_view["csv_path"])
+            assert csv_path.is_file()
+            csv_text = csv_path.read_text(encoding="utf-8-sig")
+            assert "参数版本" in csv_text
+            assert "阶段1 标定" in csv_text and "空盘" in csv_text
+            assert "阶段2 规则刚体" in csv_text and "阶段3 平行轴" in csv_text
+            docx_view = call("export_docx")
+            docx_path = Path(docx_view["docx_path"])
+            assert docx_path.is_file() and docx_path.stat().st_size > 20000
+            docx_doc = docx.Document(str(docx_path))
+            assert len(docx_doc.tables) >= 6 and len(docx_doc.inline_shapes) >= 1
             assert parallel_view["par_figure"] is None
             drawn = call("draw_par")
             assert drawn["par_figure"] is not None
@@ -683,6 +715,12 @@ def main():
             with patch.dict(os.environ, {"TUTOR_MODEL": "", "OPENAI_API_KEY": ""}, clear=False):
                 virtual_view = call("virt_cal_group")
             assert len(stage_mod.groups_for(session["experiment"], "virtual", "calibrate")) == 1
+            assert "A 类不确定度还没有估计" in virtual_view["cal_preview_md"]
+            call("virt_cal_group")
+            assert len(stage_mod.groups_for(session["experiment"], "virtual", "calibrate")) == 2
+            cal_table = stage_mod.groups_md(session["experiment"], "virtual", "calibrate")
+            assert "T₀ / s" in cal_table and "T₁ / s" in cal_table
+            assert "第 1 组" in cal_table and "第 2 组" in cal_table
             virtual_param = exp_mod.active_param(session["experiment"], "virtual")
             virtual_est = stage_mod.calibration_estimate(
                 session["experiment"], "virtual", virtual_param)

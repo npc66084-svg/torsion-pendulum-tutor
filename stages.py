@@ -117,12 +117,15 @@ def add_calibration_group(state, mode, n_periods, t0_text, t1_text, note=""):
         raise ValueError("空盘总时间至少要填一个读数。")
     if not t1:
         raise ValueError("加圆柱总时间至少要填一个读数。")
+    active = experiment.active_param(state, mode) or {}
     group = {
         "id": "cal_" + uuid4().hex[:8],
         "n_periods": int(n_periods),
         "t0": t0,
         "t1": t1,
         "note": _clean_note(note),
+        "param_id": active.get("id"),
+        "param_label": active.get("label"),
         "created_at": experiment.now(),
     }
     stage(state, mode, "calibrate")["groups"].append(group)
@@ -139,6 +142,7 @@ def add_measurement_group(state, mode, stage_key, condition, n_periods, times_te
     times = experiment.parse_readings(times_text, "总时间")
     if not times:
         raise ValueError("总时间至少要填一个读数。")
+    active = experiment.active_param(state, mode) or {}
     group = {
         "id": "g_" + uuid4().hex[:8],
         "stage": stage_key,
@@ -146,6 +150,8 @@ def add_measurement_group(state, mode, stage_key, condition, n_periods, times_te
         "n_periods": int(n_periods),
         "times": times,
         "note": _clean_note(note),
+        "param_id": active.get("id"),
+        "param_label": active.get("label"),
         "created_at": experiment.now(),
     }
     stage(state, mode, stage_key)["groups"].append(group)
@@ -184,20 +190,60 @@ def void_group(state, mode, stage_key, group_id):
     raise ValueError("没有这个测量组。")
 
 
+def _fmt_total(times):
+    """一组总时间的显示文本；多读数时标出次数，数值保留到 0.001 s。"""
+    values = [float(value) for value in (times or [])]
+    if not values:
+        return "—"
+    text = f"{sum(values) / len(values):.3f}"
+    return text if len(values) == 1 else f"{text}（{len(values)} 次）"
+
+
+def _fmt_period(times, n_periods):
+    """由一组总时间求周期 T，保留 4 位小数；只做除法，不算不确定度。"""
+    values = [float(value) for value in (times or [])]
+    if not values or not n_periods:
+        return "—"
+    return f"{sum(values) / len(values) / int(n_periods):.4f}"
+
+
 def group_choices(state, mode, stage_key, condition=None):
     items = groups_for(state, mode, stage_key, condition)
     choices = []
     for index, item in enumerate(items, start=1):
         if stage_key == "calibrate":
-            label = f"第 {index} 组 · N={item['n_periods']} · 空盘{len(item['t0'])}次 · 加圆柱{len(item['t1'])}次"
+            label = (f"第 {index} 组 · N={item['n_periods']} · "
+                     f"T₀={_fmt_period(item['t0'], item['n_periods'])} · "
+                     f"T₁={_fmt_period(item['t1'], item['n_periods'])} s")
         else:
             labels = SHAPE_LABELS if stage_key == "shapes" else PARALLEL_LABELS
             label = (f"第 {index} 组 · {labels.get(item.get('condition'), item.get('condition'))} · "
-                     f"N={item['n_periods']} · {len(item['times'])}次")
+                     f"N={item['n_periods']} · {len(item['times'])}次 · "
+                     f"T={_fmt_period(item['times'], item['n_periods'])} s")
         if item.get("superseded"):
             label += "（已作废）"
         choices.append((label, item["id"]))
     return choices
+
+
+def param_change_note(state, mode):
+    """切换当前参数版本后，说明阶段1～3 会用新版本统一重算。"""
+    groups = [group for key in ("calibrate", "shapes", "parallel")
+              for group in groups_for(state, mode, key) if not group.get("superseded")]
+    if not groups:
+        return ""
+    active = experiment.active_param(state, mode) or {}
+    stale = [group for group in groups if group.get("param_id") != active.get("id")]
+    if not stale:
+        return ""
+    labels = []
+    for group in stale:
+        label = group.get("param_label") or "未记录版本"
+        if label not in labels:
+            labels.append(label)
+    return (f"\n注意：阶段1～3 已有 {len(stale)} 组是在 {'、'.join(labels)} 下测的，"
+            f"现在会统一按「{active.get('label') or '当前版本'}」重算；"
+            "之前算出的 K、I₀ 和几何值可能对不上。")
 
 
 def _group_period(group, settings):
@@ -248,19 +294,28 @@ def calibration_estimate(state, mode, params):
     }
 
 
+def _a_type_note(groups):
+    return "（只有 1 组，A 类未估计）" if groups == 1 else ""
+
+
 def calibration_preview(state, mode, params):
     estimate = calibration_estimate(state, mode, params)
     t0_text, _ = uncertainty.format_result(estimate["T0"]["value"], estimate["T0"]["u"], "s")
     t1_text, _ = uncertainty.format_result(estimate["T1"]["value"], estimate["T1"]["u"], "s")
-    lines = [
-        f"标定组：{estimate['groups']} 组",
-        "",
+    lines = [f"标定组：{estimate['groups']} 组", ""]
+    if estimate["groups"] < 3:
+        lines.extend([
+            f"现在只有 {estimate['groups']} 组，A 类不确定度还没有估计（单组时为 0），"
+            "上面的 ± 只含计时误差；建议凑到 3 组以上再下结论。",
+            "",
+        ])
+    lines.extend([
         f"- T₀ = {t0_text}",
         f"- T₁ = {t1_text}",
         "",
         "由阶段0 的圆柱质量和直径算 I₁；由 T₀、T₁ 算 K 和 I₀。",
-        "这里只显示 T₀、T₁；I₁、K、I₀ 请你自己算，再填到下面。",
-    ]
+        "± 后是合成标准不确定度 u_c（k=1）。这里只显示 T₀、T₁；I₁、K、I₀ 请你自己算，再填到下面。",
+    ])
     return "\n".join(lines)
 
 
@@ -302,8 +357,12 @@ def shape_preview(state, mode, params):
             lines.append(f"- {SHAPE_LABELS[condition]}：{message}")
             continue
         t_text, _ = uncertainty.format_result(estimate["T"]["T"], estimate["T"]["u_T"], "s")
-        lines.append(f"- {SHAPE_LABELS[condition]}：T = {t_text}，{estimate['groups']} 组")
-    return "\n".join(lines) or "还没有测量组。"
+        lines.append(f"- {SHAPE_LABELS[condition]}：T = {t_text}，{estimate['groups']} 组"
+                     f"{_a_type_note(estimate['groups'])}")
+    if not lines:
+        return "还没有测量组。"
+    lines.extend(["", "± 后是合成标准不确定度 u_c（k=1）。"])
+    return "\n".join(lines)
 
 
 def parallel_estimate(state, mode, condition, params):
@@ -334,8 +393,12 @@ def parallel_preview(state, mode, params):
             continue
         t_text, _ = uncertainty.format_result(
             estimate["T"]["T"], estimate["T"]["u_T"], "s")
-        lines.append(f"- {label}：T = {t_text}，{estimate['groups']} 组")
-    return "\n".join(lines) or "还没有测量组。"
+        lines.append(f"- {label}：T = {t_text}，{estimate['groups']} 组"
+                     f"{_a_type_note(estimate['groups'])}")
+    if not lines:
+        return "还没有测量组。"
+    lines.extend(["", "± 后是合成标准不确定度 u_c（k=1）。"])
+    return "\n".join(lines)
 
 
 def _student_float(text):
@@ -442,6 +505,39 @@ def student_points(results):
     return _regression_from_student(results)
 
 
+def shape_uncertainties(state, mode, params):
+    """{对象名: (u_I实验, u_I几何)}，给阶段2 图加误差棒；缺数据的对象不出现。"""
+    errors = {}
+    for condition in SHAPE_CONDITIONS:
+        try:
+            estimate = shape_estimate(state, mode, condition, params)
+        except ValueError:
+            continue
+        errors[SHAPE_LABELS[condition]] = (estimate["inertia"]["u"],
+                                           estimate["geometric"]["u"])
+    return errors
+
+
+def parallel_uncertainties(state, mode, params, results):
+    """(对称 u 列表, 不对称 u 列表)，顺序与学生填的 I总 点一致。"""
+    total = (results or {}).get("I_total") or {}
+
+    def collect(keys):
+        values = []
+        for key in keys:
+            try:
+                values.append(parallel_estimate(state, mode, key, params)["total"]["u"])
+            except ValueError:
+                values.append(0.0)
+        return values
+
+    sym_keys = [f"sym-{distance:g}" for distance in SYMMETRIC_DISTANCES
+                if _student_float(total.get(f"sym-{distance:g}")) is not None]
+    asym_keys = [f"asym-{first:g}-{second:g}" for first, second in ASYMMETRIC_PAIRS
+                 if _student_float(total.get(f"asym-{first:g}-{second:g}")) is not None]
+    return collect(sym_keys), collect(asym_keys)
+
+
 def _slope_item(key, label, student_text, regression, field, unit=""):
     student = _student_float(student_text)
     expected = regression[field]
@@ -510,27 +606,46 @@ def questions_for(stage_key):
     return list(QUESTIONS.get(stage_key) or [])
 
 
+def _param_mismatch_note(state, mode, groups):
+    """组表下方提醒：有组不是在当前版本下测的，结果会被重算。"""
+    active_id = (experiment.active_param(state, mode) or {}).get("id")
+    stale = [group for group in groups
+             if not group.get("superseded") and group.get("param_id") != active_id]
+    if not stale:
+        return ""
+    labels = []
+    for group in stale:
+        label = group.get("param_label") or "未记录版本"
+        if label not in labels:
+            labels.append(label)
+    return (f"\n\n注意：有 {len(stale)} 组是在 {'、'.join(labels)} 下测的；"
+            "上表按当前采用版本重算。")
+
+
 def groups_md(state, mode, stage_key):
     groups = groups_for(state, mode, stage_key)
     if not groups:
         return "还没有测量组。填上总时间，点「添加一组」。"
     if stage_key == "calibrate":
-        lines = ["| 组 | N | 空盘次数 | 加圆柱次数 | 备注 |",
-                 "| --- | --- | --- | --- | --- |"]
+        lines = ["| 组 | N | 空盘总时间 / s | 加圆柱总时间 / s | T₀ / s | T₁ / s | 备注 |",
+                 "| --- | --- | --- | --- | --- | --- | --- |"]
         for index, group in enumerate(groups, start=1):
             label = "第 " + str(index) + " 组" + ("（已作废）" if group.get("superseded") else "")
             lines.append(
-                f"| {label} | {group['n_periods']} | {len(group['t0'])} | "
-                f"{len(group['t1'])} | {group.get('note') or '—'} |")
-        return "\n".join(lines)
-    lines = ["| 组 | 条件 | N | 次数 | 备注 |", "| --- | --- | --- | --- | --- |"]
+                f"| {label} | {group['n_periods']} | {_fmt_total(group['t0'])} | "
+                f"{_fmt_total(group['t1'])} | {_fmt_period(group['t0'], group['n_periods'])} | "
+                f"{_fmt_period(group['t1'], group['n_periods'])} | {group.get('note') or '—'} |")
+        return "\n".join(lines) + _param_mismatch_note(state, mode, groups)
+    lines = ["| 组 | 条件 | N | 总时间 / s | T / s | 备注 |",
+             "| --- | --- | --- | --- | --- | --- |"]
     labels = SHAPE_LABELS if stage_key == "shapes" else PARALLEL_LABELS
     for index, group in enumerate(groups, start=1):
         label = "第 " + str(index) + " 组" + ("（已作废）" if group.get("superseded") else "")
         lines.append(
             f"| {label} | {labels.get(group.get('condition'), group.get('condition'))} | "
-            f"{group['n_periods']} | {len(group['times'])} | {group.get('note') or '—'} |")
-    return "\n".join(lines)
+            f"{group['n_periods']} | {_fmt_total(group['times'])} | "
+            f"{_fmt_period(group['times'], group['n_periods'])} | {group.get('note') or '—'} |")
+    return "\n".join(lines) + _param_mismatch_note(state, mode, groups)
 
 
 def check_markdown(result):
@@ -551,4 +666,6 @@ def check_markdown(result):
     passed = sum(1 for item in result["items"] if item.get("ok"))
     lines.append("")
     lines.append(f"**{passed}/{len(result['items'])} 项相符。**")
+    lines.append("")
+    lines.append("表中 ± 后是合成标准不确定度 u_c（k=1）。")
     return "\n".join(lines)

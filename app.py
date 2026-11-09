@@ -126,6 +126,7 @@ def set_task(task_id):
     session["_compare_ids"] = []
     session["_sheet_md"] = ""
     session["_csv_path"] = None
+    session["_docx_path"] = None
     session["_ask_selection"] = None
     append_event(session, "task_change", "program", params=params.copy())
 
@@ -486,32 +487,86 @@ def _blank_sheet_now():
     return "空白记录表已生成。可以照着表逐行记录，再把实验室读数录入程序。"
 
 
+CSV_HEADER = ["模式", "阶段", "参数版本", "状态", "组", "条件", "N",
+              "总时间 / s", "周期 T / s", "备注"]
+
+
+def _csv_group_row(mode_label, stage_label, group, index, condition, times):
+    """一行一次计时。标定按空盘、加圆柱各占一行；总时间取组内平均。"""
+    count = int(group.get("n_periods") or 0)
+    values = [float(value) for value in (times or [])]
+    if not values or not count:
+        return None
+    total = sum(values) / len(values)
+    return [mode_label, stage_label, group.get("param_label") or "—",
+            "已作废" if group.get("superseded") else "",
+            f"第 {index} 组", condition or "", count,
+            f"{total:.3f}", f"{total / count:.4f}", group.get("note") or ""]
+
+
+def _stage_csv_rows(state, mode):
+    rows = []
+    mode_label = experiment.MODE_LABELS.get(mode, mode)
+    for index, group in enumerate(stages.groups_for(state, mode, "calibrate"), start=1):
+        for condition, key in (("空盘", "t0"), ("加圆柱", "t1")):
+            rows.append(_csv_group_row(mode_label, "阶段1 标定", group, index,
+                                       condition, group.get(key)))
+    for stage_key, stage_label, labels in (
+        ("shapes", "阶段2 规则刚体", stages.SHAPE_LABELS),
+        ("parallel", "阶段3 平行轴", stages.PARALLEL_LABELS),
+    ):
+        for index, group in enumerate(stages.groups_for(state, mode, stage_key), start=1):
+            condition = labels.get(group.get("condition"), group.get("condition"))
+            rows.append(_csv_group_row(mode_label, stage_label, group, index,
+                                       condition, group.get("times")))
+    return [row for row in rows if row]
+
+
 def _export_csv():
     if session is None:
         raise ValueError("请先开始学习。")
-    rows = measurement_summaries()
+    state = experiment.ensure_state(session)
+    mode = state.get("mode") or experiment.MODE_REAL
+    rows = _stage_csv_rows(state, mode)
     if not rows:
-        raise ValueError("当前来源还没有可导出的记录。")
+        for index, item in enumerate(measurement_summaries(), start=1):
+            rows.append([origin_label(current_origin(session)), "旧版记录", "", "",
+                         f"第 {index} 条", item.get("assembly_name") or "",
+                         item.get("n_periods"), total_display(item),
+                         period_display(item), item.get("note") or ""])
+    if not rows:
+        raise ValueError("当前模式还没有可导出的测量组；先在阶段1～3 添加或生成一组。")
     path = (Path(tempfile.gettempdir())
             / f"torsion_{session['student_id']}_{uuid4().hex[:8]}.csv")
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["次序", "来源", "对象", "位置", "N", "总时间 / s",
-                         "周期 T / s", "备注"])
-        for index, item in enumerate(rows, start=1):
-            params = item["params"]
-            writer.writerow([
-                index,
-                "实验室录入" if item.get("origin") == LAB else "虚拟练习",
-                item.get("assembly_name") or "",
-                _position_label(item),
-                item.get("n_periods"),
-                total_display(item),
-                period_display(item),
-                item.get("note") or "",
-            ])
+        writer.writerow(CSV_HEADER)
+        writer.writerows(rows)
     session["_csv_path"] = str(path)
-    return "已生成当前来源的原始数据 CSV，点下载即可。"
+    return "已生成当前模式的测量数据 CSV；点下面的文件名下载。"
+
+
+def _export_docx():
+    if session is None:
+        raise ValueError("请先开始学习。")
+    state = experiment.ensure_state(session)
+    mode = state.get("mode") or experiment.MODE_REAL
+    groups = [group for key in ("calibrate", "shapes", "parallel")
+              for group in stages.groups_for(state, mode, key)]
+    if not groups:
+        raise ValueError("还没有测量组；先在阶段1～3 添加或生成一组，再导出报告。")
+    tmp_dir = Path(tempfile.mkdtemp(prefix="torsion_report_"))
+    path = tmp_dir / f"torsion_report_{session['student_id']}_{uuid4().hex[:6]}.docx"
+    try:
+        import report_docx
+        report_docx.build(path, state, mode, tmp_dir)
+    except ImportError as exc:
+        raise ValueError("生成 Word 需要 python-docx，请在项目环境执行 "
+                         "pip install python-docx。") from exc
+    except Exception as exc:  # 生成失败时给出可读提示，不让界面卡住
+        raise RuntimeError(f"生成 Word 失败：{exc}") from exc
+    session["_docx_path"] = str(path)
+    return "已生成实验报告 .docx；点下面的文件名下载。"
 
 
 def _set_compare(ids):
@@ -649,7 +704,7 @@ def _report_groups(state, mode):
         rows.append(
             f"| 标定 | 第 {index} 组 | {n} | {len(group.get('t0') or [])}/{len(group.get('t1') or [])} | "
             f"T0={_fmt_number(t0, unit='s')}；T1={_fmt_number(t1, unit='s')} | "
-            f"{group.get('note') or '—'} |")
+            f"{group.get('note') or '—'}（{group.get('param_label') or '版本未记录'}） |")
     for condition in stages.SHAPE_CONDITIONS:
         for index, group in enumerate(stages.groups_for(state, mode, "shapes", condition), start=1):
             if group.get("superseded"):
@@ -659,7 +714,7 @@ def _report_groups(state, mode):
             rows.append(
                 f"| 规则刚体 | {stages.SHAPE_LABELS[condition]} 第 {index} 组 | {n} | "
                 f"{len(times)} | {_fmt_number(_mean_total(times, n), unit='s')} | "
-                f"{group.get('note') or '—'} |")
+                f"{group.get('note') or '—'}（{group.get('param_label') or '版本未记录'}） |")
     for condition, label in stages.parallel_conditions():
         for index, group in enumerate(stages.groups_for(state, mode, "parallel", condition), start=1):
             if group.get("superseded"):
@@ -669,7 +724,7 @@ def _report_groups(state, mode):
             rows.append(
                 f"| 平行轴 | {label} 第 {index} 组 | {n} | {len(times)} | "
                 f"{_fmt_number(_mean_total(times, n), unit='s')} | "
-                f"{group.get('note') or '—'} |")
+                f"{group.get('note') or '—'}（{group.get('param_label') or '版本未记录'}） |")
     return rows
 
 
@@ -807,7 +862,9 @@ def _stage_view():
         later_visible=False,
         par_figure=(
             charts.parallel_figure(
-                *stages.student_points(parallel["results"]))
+                *stages.student_points(parallel["results"]),
+                errors=stages.parallel_uncertainties(
+                    state, mode, params, parallel["results"]))
             if exp_stage == experiment.STAGE_PARALLEL
             and (session or {}).get("_par_show") else None),
         cal_groups_md=_safe_stage_text(stages.groups_md, state, mode, "calibrate"),
@@ -846,11 +903,15 @@ def _stage_view():
         summary_text=(data["summary"].get("text") or
                       "点击「生成实验报告草稿」，AI 会按标准实验报告结构写一份草稿；不会自动提交。"),
         summary_shapes_figure=(
-            charts.shapes_figure(shape_rows)
+            charts.shapes_figure(
+                shape_rows, stages.shape_uncertainties(state, mode, params))
             if exp_stage == experiment.STAGE_SUMMARY
             and (session or {}).get("_summary_show") else None),
         summary_parallel_figure=(
-            charts.parallel_figure(*stages.student_points(parallel["results"]))
+            charts.parallel_figure(
+                *stages.student_points(parallel["results"]),
+                errors=stages.parallel_uncertainties(
+                    state, mode, params, parallel["results"]))
             if exp_stage == experiment.STAGE_SUMMARY
             and (session or {}).get("_summary_show") else None),
         summary_table_md=_stage_summary_table(data),
@@ -1041,6 +1102,7 @@ def get_view_state(message="就绪", busy=False, clear=False):
         compare_summaries=compare_summaries, compare_note=compare_note,
         sheet_md=(session or {}).get("_sheet_md") or "" if active else "",
         csv_path=(session or {}).get("_csv_path") if active else None,
+        docx_path=(session or {}).get("_docx_path") if active else None,
         lab_card_md=_lab_card_md(), lab_mode=(session or {}).get("_lab_mode") or "total_time" if active else "total_time",
         lab_value=(session or {}).get("_lab_value") or "" if active else "",
         lab_note=(session or {}).get("_lab_note") or "" if active else "",
@@ -1771,6 +1833,8 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
             if mode_choice not in experiment.MODES:
                 raise ValueError("请选择真实实验模式或虚拟实验模式。")
             experiment.set_mode(state, mode_choice)
+            session["_csv_path"] = None
+            session["_docx_path"] = None
             session.setdefault("_param_forms", {}).setdefault(
                 mode_choice, experiment.param_to_form(
                     experiment.active_param(state, mode_choice)))
@@ -1803,6 +1867,7 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
                        if version["complete"] else
                        f"已保存参数 {version['label']}，还有未填项："
                        f"{'、'.join(version['missing'])}。")
+            message += stages.param_change_note(state, experiment.MODE_REAL)
         elif action == "load_param":
             if state["mode"] != experiment.MODE_REAL:
                 raise ValueError("虚拟模式的器材参数由程序给定，不能修改。")
@@ -1814,6 +1879,7 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
             append_event(session, "param_load", "student", mode=state["mode"],
                          version_id=version["id"])
             message = f"已把 {version['label']} 载入表单，并设为当前采用。"
+            message += stages.param_change_note(state, state["mode"])
         elif action == "use_param":
             if state["mode"] != experiment.MODE_REAL:
                 raise ValueError("虚拟模式的器材参数由程序给定，不能修改。")
@@ -1821,6 +1887,7 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
             append_event(session, "param_use", "student", mode=state["mode"],
                          version_id=version["id"], label=version["label"])
             message = f"阶段1～3 现在采用 {version['label']}。"
+            message += stages.param_change_note(state, state["mode"])
         elif action == "add_cal_group":
             n = _n_value(cal_n, state, state["mode"])
             group = stages.add_calibration_group(state, state["mode"], n, cal_t0, cal_t1, cal_note)
@@ -2165,6 +2232,8 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
             message = _blank_sheet_now()
         elif action == "export_csv":
             message = _export_csv()
+        elif action == "export_docx":
+            message = _export_docx()
         elif action == "draft_summary":
             message = _make_draft()
         elif action in ("ask", "hint"):
