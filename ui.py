@@ -1584,14 +1584,14 @@ def build_ui(handle, get_view_state):
                         summary_table_md = md("")
                         with gr.Row():
                             export_csv = gr.Button("生成原始数据 CSV", variant="secondary",
-                                                   scale=0)
+                                                   scale=0, min_width=220)
                             md("生成后点下面的文件名下载；含阶段1～3 每组的总时间和周期。",
                                elem_id="csv-note")
                         csv_file = gr.File(label="原始数据 CSV", file_count="single",
                                            interactive=False, visible=False)
                         with gr.Row():
                             export_docx = gr.Button("导出实验报告 .docx", variant="primary",
-                                                    scale=0)
+                                                    scale=0, min_width=220)
                             md("含参数、数据表、结果和两张图；讨论与结论留空，自己写。",
                                elem_id="docx-note")
                         docx_file = gr.File(label="实验报告 .docx", file_count="single",
