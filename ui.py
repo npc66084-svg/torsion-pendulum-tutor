@@ -27,52 +27,117 @@ MANUAL = _student_manual()
 ONBOARDING_MD = r"""
 ### 3 分钟上手
 
-1. **选模式**：真实实验模式用来记录你自己测的数据；虚拟实验模式的器材参数由程序给定，数据由点击测量生成。
-2. **阶段0 器材参数**：登记质量、直径、长度和测量设置。参数随时可改、可追加；每保存一次生成一个新版本，旧版本保留。
-3. **阶段1 标定**：空盘和加圆柱，不限组数；学生填 \(I_1\)、\(K\)、\(I_0\)，由程序算不确定度和有效数字；先点「核对结果（本地）」，再需要时点「请 AI 解释」。
-4. **阶段2 规则刚体**：圆筒、球体、细杆；学生填 \(I_{\\text{实验}}\)、\(I_{\\text{几何}}\)、百分偏差，AI 检查并回答阶段问题。
-5. **阶段3 平行轴**：细杆基准、五个对称距离、四组不对称；学生填 \(I_{\\text{总}}\)、斜率、截距，程序按数据画图。
-6. **阶段4 图表与报告**：点击生成图表和标准实验报告草稿，不自动提交。
+1. **选模式**：真实实验模式记录你自己测的数据；虚拟实验模式的器材参数由程序给定，周期由点击生成。
+2. **阶段0 器材参数**：登记质量、直径、长度和测量设置。参数随时可改、可追加；每保存一次生成一个新版本。
+3. **阶段1 标定**：空盘和加圆柱，不限组数；学生填 \(I_1\)、\(K\)、\(I_0\)，程序算不确定度和有效数字；先点「核对结果（本地）」，需要时再「请 AI 解释」。
+4. **阶段2 规则刚体**：圆筒、球体、细杆；学生填 \(I_{\text{实验}}\)、\(I_{\text{几何}}\) 和百分偏差，AI 检查并回答阶段问题。
+5. **阶段3 平行轴**：细杆基准、五个对称距离、四组不对称；学生填 \(I_{\text{总}}\)、斜率、截距，程序按数据画图。
+6. **阶段4 图表与报告**：生成图表、CSV / Word 报告和标准实验报告草稿，不自动提交。
 
-**参数修改**：阶段0 保存的是版本，不覆盖旧版；阶段1～3 使用你选定的“当前采用版本”。  
-**问 AI**：选中页面任意文字，浮出的「询问 AI」会把这段和上下文填进问题框。  
-**当前版本**：阶段0～4 均可用；虚拟模式在阶段1～3 用「生成一组数据」。
+**参数版本**：阶段0 只追加版本，不覆盖旧版；阶段1～3 使用当前采用版本。  
+**问 AI**：选中页面任意文字，浮出的「询问 AI」会把这段和上下文填进问题框。
 """
 
-HEADER_HTML = """
-<header class="lab-head">
-  <div class="lab-head-copy">
-    <p class="eyebrow">物理教学实验 · 扭摆法</p>
-    <h1>扭摆法测转动惯量</h1>
-    <p class="lede">真实实验和虚拟实验分开记录；参数可改可追加，计算用你选定的版本。</p>
-    <div class="chips">
-      <span>真实 / 虚拟双模式</span>
-      <span>阶段0～4</span>
-      <span>参数版本可追加</span>
-    </div>
-  </div>
-  <svg class="lab-head-art" viewBox="0 0 240 170" aria-hidden="true">
-    <circle cx="150" cy="28" r="9" fill="none" stroke="#e7c7a4" stroke-width="2"/>
-    <path d="M150 37 L150 88" stroke="#e7c7a4" stroke-width="2" stroke-dasharray="4 4"/>
-    <ellipse cx="150" cy="98" rx="70" ry="14" fill="none" stroke="#e7c7a4" stroke-width="2"/>
-    <ellipse cx="150" cy="98" rx="26" ry="5" fill="#e7c7a4" opacity="0.35"/>
-    <path d="M80 98 L220 98" stroke="#e7c7a4" stroke-width="2"/>
-    <rect x="112" y="54" width="18" height="30" rx="4" fill="#e7c7a4" opacity="0.65"/>
-    <rect x="188" y="54" width="18" height="30" rx="4" fill="#e7c7a4" opacity="0.65"/>
-    <path d="M150 112 A 62 62 0 0 1 201 132" fill="none" stroke="#e7c7a4" stroke-width="1.6"/>
+LANDING_BG_HTML = """
+<div class="landing-bg" aria-hidden="true">
+  <span class="orb orb-a"></span>
+  <span class="orb orb-b"></span>
+  <span class="mesh"></span>
+  <svg class="pendulum-art" viewBox="0 0 720 920">
+    <defs>
+      <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f0d3a6"/><stop offset="1" stop-color="#a9763f"/>
+      </linearGradient>
+      <radialGradient id="halo" cx="50%" cy="45%" r="55%">
+        <stop offset="0" stop-color="rgba(233,201,155,.22)"/>
+        <stop offset="1" stop-color="rgba(233,201,155,0)"/>
+      </radialGradient>
+    </defs>
+    <circle cx="360" cy="430" r="330" fill="url(#halo)"/>
+    <g class="swing">
+      <line x1="360" y1="-40" x2="360" y2="330" stroke="url(#brass)" stroke-width="2.6"/>
+      <rect x="332" y="6" width="56" height="12" rx="6" fill="url(#brass)" opacity=".9"/>
+      <rect x="300" y="270" width="120" height="96" rx="10" fill="rgba(233,201,155,.08)" stroke="url(#brass)" stroke-width="2"/>
+      <ellipse cx="360" cy="270" rx="60" ry="12" fill="rgba(233,201,155,.12)" stroke="url(#brass)" stroke-width="1.6"/>
+      <ellipse cx="360" cy="392" rx="210" ry="46" fill="rgba(233,201,155,.06)" stroke="url(#brass)" stroke-width="2.4"/>
+      <ellipse cx="360" cy="382" rx="210" ry="46" fill="none" stroke="url(#brass)" stroke-width="1.2" opacity=".55"/>
+      <ellipse cx="360" cy="382" rx="64" ry="14" fill="rgba(233,201,155,.10)" stroke="url(#brass)" stroke-width="1.4"/>
+      <line x1="90" y1="382" x2="630" y2="382" stroke="url(#brass)" stroke-width="2" opacity=".9"/>
+      <rect x="150" y="356" width="34" height="52" rx="8" fill="rgba(233,201,155,.14)" stroke="url(#brass)" stroke-width="1.8"/>
+      <rect x="536" y="356" width="34" height="52" rx="8" fill="rgba(233,201,155,.14)" stroke="url(#brass)" stroke-width="1.8"/>
+      <path d="M 96 430 A 264 264 0 0 1 624 430" fill="none" stroke="rgba(233,201,155,.35)" stroke-width="1.4" stroke-dasharray="6 10"/>
+    </g>
   </svg>
-</header>
+  <span class="vignette"></span>
+</div>
+"""
+
+LANDING_HERO_HTML = """
+<div class="hero-copy">
+  <p class="eyebrow"><span class="pip"></span>大学物理实验 · 扭摆法</p>
+  <h1>扭摆法<br><em>测转动惯量</em></h1>
+  <p class="lede">从一次摆动读出转动惯量。登记器材、标定扭转常数、测规则刚体、验证平行轴定理，最后生成图表与实验报告。</p>
+  <div class="hero-chips">
+    <span>真实 / 虚拟双模式</span>
+    <span>自动 A/B 类不确定度</span>
+    <span>AI 只解释，不给答案</span>
+  </div>
+  <div class="flow">
+    <span><i>01</i>器材参数</span>
+    <span><i>02</i>标定</span>
+    <span><i>03</i>规则刚体</span>
+    <span><i>04</i>平行轴</span>
+    <span><i>05</i>报告</span>
+  </div>
+</div>
+"""
+
+LOGIN_HEAD_HTML = """
+<div class="login-head">
+  <span class="kicker">实验者登录</span>
+  <h2>进入实验台</h2>
+  <p>输入学号开始记录。数据只保存在本机，不会发给 AI。</p>
+</div>
+"""
+
+APP_BRAND_HTML = """
+<div class="app-brand">
+  <span class="brand-mark">扭</span>
+  <span class="brand-text"><strong>扭摆法测转动惯量</strong><small>实验工作台</small></span>
+</div>
 """
 
 MODE_NOTE = ("**真实实验模式**：参数、周期、计算结果都由你填写和保存。  \n"
              "**虚拟实验模式**：器材参数由程序给定，只读；周期由点击测量生成。")
-PRE_START_MD = "填学号，点「开始学习」。开始后先到 **阶段0 器材参数** 登记本次实验的器材。"
+PRE_START_MD = r"""
+### 原理速览
+
+**① 周期由转动惯量决定**　扭摆的周期只与转动惯量 \(I\) 和扭转常数 \(K\) 有关：
+
+$$T = 2\pi\sqrt{\frac{I}{K}}$$
+
+**② 先用已知圆柱标定**　塑料圆柱 \(I_1=\tfrac12 mR^2\)。测空盘周期 \(T_0\) 和加圆柱周期 \(T_1\)：
+
+$$K=\frac{4\pi^2 I_1}{T_1^2-T_0^2},\qquad I_0=\frac{I_1T_0^2}{T_1^2-T_0^2}$$
+
+**③ 再测待测物体**　圆筒、球体要扣载物盘：\(I=\frac{KT^2}{4\pi^2}-I_0\)；细杆不扣 \(I_0\)。平行轴：\(I=I_{\text{杆}}+2I_c+m(d_1^2+d_2^2)\)。不确定度按 A、B 类合成，统一给出 \(u_c\)（\(k=1\)）。
+"""
 
 PAGE_JS = """
 () => {
   document.documentElement.style.colorScheme = 'light';
   document.documentElement.classList.remove('dark');
   document.body.classList.remove('dark');
+  const fitMain = () => {
+    const main = document.querySelector('.gradio-container .main');
+    if (!main) return;
+    main.style.padding = window.innerWidth <= 720 ? '8px 0 0' : '';
+  };
+  fitMain();
+  if (!window.__tutorFitMain) {
+    window.__tutorFitMain = true;
+    window.addEventListener('resize', fitMain);
+  }
   if (!window.__tutorKeys) {
     window.__tutorKeys = true;
     const shown = (node) => {
@@ -525,7 +590,13 @@ header.lab-head .chips span {
     display: table !important;
     width: 100% !important; border-collapse: collapse; font-size: 14px; margin: 8px 0;
 }
-.gradio-container .prose table { display: table !important; width: 100% !important; }
+.gradio-container .prose table { display: table !important; width: 100% !important;
+    border-collapse: collapse; font-size: 13.5px; }
+.gradio-container .prose th, .gradio-container .prose td {
+    border: 1px solid #e4d9cc; padding: 7px 9px; vertical-align: top; }
+.gradio-container .prose th {
+    background: #f3ece3; color: #1b3a4b; text-align: left; font-weight: 700; }
+.gradio-container .prose tr:nth-child(even) td { background: #fbf6ee; }
 #param-preview th, #param-versions th, #virtual-params th {
     background: #f3ece3; color: #1b3a4b; font-weight: 700; text-align: left;
 }
@@ -630,11 +701,420 @@ body:has(#tutor-dock.tutor-open) #stage-select label { font-size: 14px; padding:
 }
 """
 
+CSS += """
+/* ================= 全屏开始页 ================= */
+body { overflow-x: hidden; }
+.gradio-container { padding: 0 18px 48px !important; }
+
+#landing {
+    position: relative; isolation: isolate; overflow: hidden;
+    width: 100vw; margin-left: calc(50% - 50vw);
+    min-height: 100vh; box-sizing: border-box;
+    padding: clamp(30px, 4.8vw, 66px) clamp(20px, 5.4vw, 86px) 56px;
+    background:
+        radial-gradient(1100px 620px at 78% 6%, rgba(31, 111, 106, 0.42), transparent 62%),
+        radial-gradient(900px 520px at 4% 98%, rgba(185, 132, 78, 0.20), transparent 60%),
+        linear-gradient(158deg, #07161c 0%, #0b242b 46%, #10383a 100%);
+    color: #f3ead9;
+}
+#landing-bg {
+    position: absolute !important; inset: 0; z-index: 0; padding: 0 !important;
+    margin: 0 !important; background: none !important; border: none !important;
+    box-shadow: none !important;
+}
+.landing-bg { position: absolute; inset: 0; overflow: hidden; }
+.orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.55; }
+.orb-a { width: 540px; height: 540px; right: -120px; top: -160px;
+    background: radial-gradient(circle, rgba(31, 111, 106, 0.85), transparent 70%); }
+.orb-b { width: 480px; height: 480px; left: -180px; bottom: -190px;
+    background: radial-gradient(circle, rgba(185, 132, 78, 0.5), transparent 70%); }
+.mesh {
+    position: absolute; inset: 0;
+    background-image:
+        linear-gradient(rgba(233, 201, 155, 0.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(233, 201, 155, 0.055) 1px, transparent 1px);
+    background-size: 72px 72px;
+    -webkit-mask-image: radial-gradient(75% 65% at 50% 38%, #000 18%, transparent 100%);
+    mask-image: radial-gradient(75% 65% at 50% 38%, #000 18%, transparent 100%);
+}
+.vignette { position: absolute; inset: 0;
+    background: radial-gradient(120% 90% at 50% 30%, transparent 42%, rgba(4, 12, 15, 0.58) 100%); }
+.pendulum-art {
+    position: absolute; right: clamp(-170px, -6vw, -40px); top: 2%;
+    width: min(52vw, 660px); height: auto; opacity: 0.5;
+    filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.35));
+}
+.swing { transform-box: view-box; transform-origin: 360px 0; animation: swing 7.5s ease-in-out infinite; }
+@keyframes swing { 0%, 100% { transform: rotate(-2.6deg); } 50% { transform: rotate(2.6deg); } }
+@keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+
+#hero-row {
+    position: relative; z-index: 2; max-width: 1340px; margin: 0 auto;
+    display: grid !important; grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+    gap: clamp(30px, 4.6vw, 74px); align-items: start;
+}
+#hero-copy { min-width: 0; animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+#hero-html { padding: 0 !important; margin: 0 !important; background: none !important;
+    border: none !important; box-shadow: none !important; }
+.hero-copy .eyebrow {
+    display: flex; align-items: center; gap: 10px; margin: 0 0 20px;
+    font-size: 12px; letter-spacing: 0.26em; color: #d9ab74 !important;
+}
+.hero-copy .pip { width: 8px; height: 8px; border-radius: 50%; background: #d9ab74;
+    box-shadow: 0 0 0 5px rgba(217, 171, 116, 0.14); }
+.hero-copy h1 {
+    margin: 0 0 20px; font-family: "Songti SC", "SimSun", "Noto Serif SC", serif;
+    font-size: clamp(42px, 4.7vw, 68px); line-height: 1.06; font-weight: 700;
+    letter-spacing: 0.02em; color: #f8f1e4;
+}
+.hero-copy h1 em { font-style: normal; color: #e2b982; }
+.hero-copy .lede { max-width: 570px; margin: 0 0 22px; font-size: clamp(15px, 1.1vw, 17px);
+    line-height: 1.85; color: rgba(243, 234, 217, 0.78); }
+.hero-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.hero-chips span { padding: 6px 12px; border: 1px solid rgba(233, 201, 155, 0.28);
+    border-radius: 999px; background: rgba(233, 201, 155, 0.07);
+    font-size: 12px; color: #e9d6ba; }
+.flow { display: flex; flex-wrap: wrap; margin: 0 0 26px; padding: 14px 0 0;
+    border-top: 1px solid rgba(233, 201, 155, 0.16); }
+.flow span { display: inline-flex; align-items: center; gap: 8px; position: relative;
+    margin-right: 18px; padding-right: 20px; font-size: 12.5px;
+    color: rgba(243, 234, 217, 0.62); }
+.flow span:not(:last-child)::after { content: ""; position: absolute; right: 0; top: 50%;
+    width: 12px; height: 1px; background: rgba(233, 201, 155, 0.3); }
+.flow i { font-style: normal; font-family: ui-monospace, "Cascadia Code", monospace;
+    font-size: 11px; color: #d9ab74; }
+
+#pre-start { margin-top: 6px; max-width: 640px; }
+#pre-start .prose h3 { margin: 0 0 14px; font-size: 11px; letter-spacing: 0.24em;
+    color: #d9ab74 !important; font-weight: 700; }
+#pre-start p { margin: 0 0 10px; font-size: 14.5px; line-height: 1.85;
+    color: rgba(243, 234, 217, 0.76) !important; }
+#pre-start strong { color: #f2e4cd !important; }
+#pre-start .katex-display { margin: 8px 0 14px; padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(233, 201, 155, 0.14);
+    border-radius: 14px; overflow-x: auto; }
+#pre-start .katex { color: #f6ead6; }
+
+#login-card {
+    position: relative; z-index: 2;
+    background: linear-gradient(180deg, rgba(18, 40, 46, 0.86), rgba(9, 24, 29, 0.92));
+    border: 1px solid rgba(233, 201, 155, 0.26); border-radius: 26px;
+    padding: 30px 30px 26px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(16px);
+    animation: rise 0.8s 0.08s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+#login-head { padding: 0 !important; margin: 0 0 18px !important;
+    background: none !important; border: none !important; box-shadow: none !important; }
+.login-head .kicker { display: inline-block; margin-bottom: 8px; font-size: 11px;
+    letter-spacing: 0.26em; color: #d9ab74 !important; }
+.login-head h2 { margin: 0 0 6px; font-family: "Songti SC", "SimSun", serif;
+    font-size: 26px; color: #f8f1e4 !important; }
+.login-head p { margin: 0; font-size: 13px; line-height: 1.7;
+    color: rgba(243, 234, 217, 0.6) !important; }
+#login-card .block, #login-card .form { background: transparent !important;
+    border: none !important; box-shadow: none !important; padding: 0 !important; }
+#login-card label span, #login-card .label-wrap span {
+    color: rgba(243, 234, 217, 0.78) !important; font-size: 13px; }
+#login-card input {
+    height: 52px; font-size: 17px; padding: 0 14px;
+    background: rgba(255, 255, 255, 0.055) !important;
+    border: 1px solid rgba(233, 201, 155, 0.28) !important;
+    border-radius: 13px !important; color: #f8f1e4 !important;
+}
+#login-card input::placeholder { color: rgba(243, 234, 217, 0.34) !important; }
+#login-card .info { color: rgba(243, 234, 217, 0.5) !important; font-size: 12px; }
+#login-card #start-learning {
+    width: 100%; height: 54px; margin-top: 12px; font-size: 17px;
+    letter-spacing: 0.14em; border-radius: 14px !important; border: none !important;
+    background: linear-gradient(135deg, #f0cf9d 0%, #d9ab74 48%, #c08b52 100%) !important;
+    color: #1a211d !important; font-weight: 700;
+    box-shadow: 0 16px 34px rgba(201, 148, 92, 0.28);
+}
+#login-card #start-learning:hover { filter: brightness(1.04); transform: translateY(-1px); }
+#demo-row { margin-top: 6px; align-items: center; }
+#demo-start { height: 40px; font-size: 13px; border-radius: 999px !important;
+    background: transparent !important; color: #e2b982 !important;
+    border: 1px dashed rgba(233, 201, 155, 0.35) !important; }
+#demo-note p { margin: 0; font-size: 12px; line-height: 1.6;
+    color: rgba(243, 234, 217, 0.5) !important; }
+
+#landing #onboarding {
+    position: relative; z-index: 2; max-width: 1340px; margin: 42px auto 0;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(233, 201, 155, 0.16) !important;
+    border-radius: 18px; box-shadow: none;
+}
+#landing #onboarding .label-wrap { color: #e2b982 !important; }
+#landing #onboarding-md p, #landing #onboarding-md li {
+    color: rgba(243, 234, 217, 0.66) !important; }
+#landing #onboarding-md strong { color: #f2e4cd !important; }
+
+/* ================= 工作台 ================= */
+#app-shell { max-width: 1360px; margin: 0 auto; padding: 12px 0 48px; }
+#app-bar {
+    position: sticky; top: 0; z-index: 40;
+    display: flex !important; align-items: center; gap: 14px;
+    padding: 10px 4px; margin: 0 0 10px;
+    background: rgba(246, 240, 230, 0.9); backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(27, 58, 75, 0.12);
+}
+#app-brand { flex: 0 0 auto; padding: 0 !important; margin: 0 !important;
+    background: none !important; border: none !important; box-shadow: none !important; }
+.app-brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+    display: grid; place-items: center; width: 42px; height: 42px;
+    border-radius: 13px; color: #f7efdf;
+    background: linear-gradient(135deg, #1b4b50, #1f6f6a);
+    font-family: "Songti SC", "SimSun", serif; font-size: 22px;
+    box-shadow: 0 10px 22px rgba(27, 58, 75, 0.22);
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+.brand-text strong { font-size: 16px; color: #1b3a4b; letter-spacing: 0.02em; }
+.brand-text small { font-size: 10.5px; color: #7c7166; letter-spacing: 0.18em; }
+#save-line { flex: 1 1 auto; min-width: 0; }
+#save-line p { margin: 0; font-size: 12.5px; color: #5c564e !important; }
+#app-bar button { border-radius: 999px !important; flex: 0 0 auto; }
+
+#mode-row {
+    background: #fffdf8 !important; border: 1px solid rgba(27, 58, 75, 0.1);
+    border-radius: 20px; padding: 12px 18px; margin: 0 0 10px;
+    align-items: center; box-shadow: 0 10px 26px rgba(27, 58, 75, 0.05);
+}
+#mode-select { background: transparent !important; border: none !important; flex: 1; }
+#mode-select .wrap { gap: 8px !important; }
+#mode-select label {
+    border: 1px solid rgba(27, 58, 75, 0.14); background: #fffdf8;
+    border-radius: 14px; padding: 10px 16px !important; font-size: 14.5px;
+    transition: all 0.18s ease;
+}
+#mode-select label:has(input:checked) {
+    background: linear-gradient(135deg, #1b4b50, #1f6f6a);
+    border-color: transparent; color: #fffdf8 !important;
+    box-shadow: 0 12px 24px rgba(31, 111, 106, 0.22);
+}
+#mode-select label:has(input:checked) span { color: #fffdf8 !important; }
+#mode-note p { margin: 2px 0; font-size: 12.5px; line-height: 1.6; color: #7c7166 !important; }
+
+#stage-row {
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; padding: 0; margin: 0 0 6px; align-items: center;
+}
+#stage-select {
+    background: #fffdf8 !important; border: 1px solid rgba(27, 58, 75, 0.1);
+    border-radius: 16px; padding: 6px; box-shadow: 0 8px 20px rgba(27, 58, 75, 0.04);
+}
+#stage-select .wrap { gap: 4px !important; flex-wrap: wrap !important; }
+#stage-select label {
+    border: none; background: transparent; border-radius: 12px;
+    padding: 9px 13px !important; font-size: 13.5px; color: #3d4a46;
+    transition: all 0.18s ease;
+}
+#stage-select label:has(input:checked) {
+    background: linear-gradient(135deg, #1b4b50, #1f6f6a);
+    color: #fffdf8 !important; box-shadow: 0 10px 20px rgba(31, 111, 106, 0.18);
+}
+#stage-select label:has(input:checked) span { color: #fffdf8 !important; }
+#learning-status p { margin: 0; font-size: 12.5px; color: #7c7166 !important; }
+#stage-hint p { margin: 2px 0 8px; font-size: 13px; line-height: 1.65; color: #5c564e !important; }
+
+.section-head h3 { font-family: "Songti SC", "SimSun", serif; font-size: 27px; letter-spacing: 0.01em; }
+.section-head p { max-width: 780px; }
+.card { border-radius: 20px; border: 1px solid rgba(27, 58, 75, 0.09); }
+.card:hover { box-shadow: 0 20px 46px rgba(27, 58, 75, 0.09); }
+
+@media (max-width: 1080px) {
+    #hero-copy { display: contents; }
+    #hero-row { display: flex !important; flex-direction: column; gap: 22px; }
+    #hero-html { order: 1; }
+    #login-card { order: 2; margin-top: 0; }
+    #pre-start { order: 3; }
+    #hero-copy h1 { font-size: clamp(34px, 8vw, 46px); }
+    .hero-copy .lede { font-size: 14.5px; margin-bottom: 16px; }
+    .hero-chips { margin-bottom: 16px; }
+}
+
+@media (max-width: 720px) {
+    main.contain, .gradio-container main {
+        width: 100% !important; max-width: 100% !important;
+        margin: 0 !important; padding: 0 !important;
+    }
+    body .gradio-container .main.fillable,
+    body .gradio-container .main {
+        padding: 8px 0 0 !important;
+    }
+    #landing { width: auto !important; margin: 0 !important;
+        padding: 22px 14px 40px !important; }
+    .gradio-container { padding: 0 10px 40px !important; }
+    #hero-copy h1 { font-size: 36px; }
+    .hero-copy .lede { font-size: 13.5px; }
+    .flow span { margin-right: 10px; padding-right: 12px; font-size: 11px; }
+    #app-bar { flex-wrap: wrap; padding: 8px 0 !important; }
+    #app-brand { flex: 1 1 100% !important; }
+    #save-line { flex: 1 1 auto !important; }
+    #app-bar > button { margin-left: auto; }
+    #mode-row { display: block !important; padding: 10px 12px !important; }
+    #mode-note { display: none !important; }
+    #stage-select label { font-size: 12px !important; padding: 7px 9px !important; }
+    #stage-select .wrap { padding: 4px !important; }
+    .section-head h3 { font-size: 23px; }
+    .card { padding: 12px 14px 14px !important; }
+}
+
+@media (max-width: 560px) {
+    #params-panel .row, #cal-panel .row, #shp-panel .row,
+    #par-panel .row, #summary-panel .row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    #app-bar button { font-size: 12px !important; padding: 6px 10px !important; }
+    #mode-select label { padding: 8px 10px !important; font-size: 13px !important; }
+}
+"""
+
+CSS += """
+/* —— 开始页做成固定全屏层，避免容器背景与宽度干扰 —— */
+#landing {
+    position: fixed !important; inset: 0 !important;
+    width: auto !important; height: 100vh !important; min-height: 0 !important;
+    overflow-y: auto !important; z-index: 60 !important; margin: 0 !important;
+    background:
+        radial-gradient(1100px 620px at 78% 6%, rgba(31, 111, 106, 0.42), transparent 62%),
+        radial-gradient(900px 520px at 4% 98%, rgba(185, 132, 78, 0.20), transparent 60%),
+        linear-gradient(158deg, #07161c 0%, #0b242b 46%, #10383a 100%) !important;
+}
+#landing-bg { position: absolute !important; inset: 0 !important; z-index: -1 !important; }
+#hero-row { position: relative; z-index: 1; margin-left: auto; margin-right: auto; }
+#landing #onboarding { position: relative; z-index: 1; }
+
+/* —— 修正：开始页内容宽度与登录卡样式 —— */
+#landing {
+    padding-left: clamp(16px, 4vw, 64px) !important;
+    padding-right: clamp(16px, 4vw, 64px) !important;
+}
+#hero-row { max-width: 1216px; }
+#pre-start { max-width: 620px; }
+#pre-start p {
+    background: transparent !important; border: none !important;
+    padding: 0 !important; margin: 0 0 10px !important;
+}
+#pre-start .prose h3 { margin-bottom: 10px; }
+#pre-start .katex-display { margin: 6px 0 12px; padding: 8px 14px; border-radius: 12px; }
+#pre-start .katex, #pre-start .katex-display, #pre-start .katex-html { color: #f6ead6 !important; }
+#pre-start .katex * { color: inherit !important; }
+#pre-start p, #pre-start li { color: rgba(243, 234, 217, 0.8) !important;
+    font-size: 14px; line-height: 1.8; }
+
+/* —— 登录卡：Gradio 的 textarea + label 容器 —— */
+#login-card label.container {
+    background: transparent !important; border: none !important;
+    padding: 0 !important; box-shadow: none !important;
+}
+#login-card label.container > span[data-testid="block-info"] {
+    display: block !important; background: transparent !important;
+    color: rgba(243, 234, 217, 0.85) !important;
+    -webkit-text-fill-color: rgba(243, 234, 217, 0.85) !important;
+    font-size: 12px !important; letter-spacing: 0.08em !important;
+    padding: 0 !important; margin: 0 0 6px !important;
+}
+#login-card .info-text { display: none !important; }
+#login-card .input-container {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(233, 201, 155, 0.28) !important;
+    border-radius: 13px !important; padding: 0 14px !important;
+}
+#login-card textarea {
+    background: transparent !important; border: none !important;
+    color: #f8f1e4 !important; font-size: 17px !important;
+    height: 48px !important; padding: 0 !important; box-shadow: none !important;
+}
+#login-card textarea::placeholder { color: rgba(243, 234, 217, 0.34) !important; }
+#demo-row { gap: 6px; margin-top: 12px; }
+#demo-start { width: 100%; }
+#demo-note p { text-align: center; }
+
+/* —— 工作台顶栏与阶段导航的版面修正 —— */
+#app-bar > [data-testid="status-tracker"],
+#mode-row > [data-testid="status-tracker"],
+#stage-row > [data-testid="status-tracker"],
+#page-row > [data-testid="status-tracker"] { display: none !important; }
+
+#app-bar { min-height: 64px; padding: 6px 4px; }
+#app-bar > .block { width: auto !important; flex: 0 0 auto !important; }
+#app-bar > #save-line { flex: 1 1 auto !important; width: auto !important; }
+#app-bar .block { min-width: 0 !important; }
+#app-brand { flex: 0 0 auto !important; }
+#save-line { flex: 1 1 auto !important; min-width: 0 !important; }
+
+#mode-select > span[data-testid="block-info"],
+#stage-select > span[data-testid="block-info"] {
+    display: block; background: transparent !important;
+    color: #7c7166 !important; -webkit-text-fill-color: #7c7166 !important;
+    font-size: 11px; letter-spacing: 0.14em; padding: 0 0 6px; margin: 0;
+}
+#mode-select, #stage-select {
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; padding: 0 !important;
+}
+#mode-row .form, #stage-row .form {
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; padding: 0 !important;
+}
+#mode-select label:has(input:checked) span,
+#stage-select label:has(input:checked) span {
+    color: #fffdf8 !important; -webkit-text-fill-color: #fffdf8 !important;
+}
+#mode-select label { font-size: 14px; padding: 9px 14px !important; }
+#stage-select { width: 100% !important; }
+#stage-select .wrap {
+    background: #fffdf8 !important;
+    border: 1px solid rgba(27, 58, 75, 0.1);
+    border-radius: 16px !important;
+    padding: 6px !important;
+    box-shadow: 0 8px 20px rgba(27, 58, 75, 0.04);
+}
+#stage-select label { font-size: 13px; padding: 8px 12px !important; }
+#stage-row { display: block !important; }
+#learning-status { margin-top: 6px; }
+#learning-status p { margin: 0; }
+#mode-row { padding: 10px 16px !important; }
+#mode-note p { font-size: 12px; }
+#pre-start { border: none !important; box-shadow: none !important; padding: 0 !important; }
+#landing #onboarding { color: rgba(243, 234, 217, 0.72) !important; }
+#landing #onboarding .label-wrap, #landing #onboarding button,
+#landing #onboarding .label-wrap span {
+    color: #e2b982 !important; -webkit-text-fill-color: #e2b982 !important;
+}
+#landing #onboarding-md, #landing #onboarding-md * {
+    color: rgba(243, 234, 217, 0.72) !important;
+    -webkit-text-fill-color: rgba(243, 234, 217, 0.72) !important;
+}
+#landing #onboarding-md strong {
+    color: #f2e4cd !important; -webkit-text-fill-color: #f2e4cd !important;
+}
+
+/* —— 摆锤放在登录卡下方右侧 —— */
+.pendulum-art { right: 2% !important; top: 47% !important;
+    width: min(34vw, 470px) !important; opacity: 0.55; }
+
+/* —— 表单标签统一成小字，不再像彩色药丸 —— */
+.gradio-container span[data-testid="block-info"] {
+    background: transparent !important; color: #5c564e !important;
+    -webkit-text-fill-color: #5c564e !important;
+    font-size: 12px !important; letter-spacing: 0.03em; padding: 0 !important;
+}
+"""
+
 
 def render_view(state, controls):
     active, busy, ready = state["active"], state["busy"], state["ready"]
     status = state["status"]
     updates = {
+        controls["landing"]: gr.update(visible=not active),
+        controls["app_bar"]: gr.update(visible=active),
+        controls["mode_row"]: gr.update(visible=active),
+        controls["stage_row"]: gr.update(visible=active),
+        controls["page_row"]: gr.update(visible=active),
         controls["student"]: gr.update(interactive=state["can_start"]),
         controls["start"]: gr.update(visible=not active, interactive=state["can_start"],
                                      variant="primary" if state["can_start"] else "secondary"),
@@ -653,7 +1133,7 @@ def render_view(state, controls):
                    "想直接验收？点左边按钮，会创建一个所有阶段都填好的演示会话。")),
         controls["mode"]: gr.update(value=state["mode"], interactive=ready),
         controls["stage"]: gr.update(value=state["exp_stage"], interactive=ready),
-        controls["stage_hint"]: state["stage_hint"],
+        controls["stage_hint"]: gr.update(value=state["stage_hint"], visible=active),
         controls["params_panel"]: gr.update(visible=active and state["params_visible"]),
         controls["real_params"]: gr.update(visible=active and state["real_params_visible"]),
         controls["virtual_params"]: gr.update(visible=active and state["virtual_params_visible"]),
@@ -769,43 +1249,47 @@ def render_view(state, controls):
 
 def build_ui(handle, get_view_state):
     with gr.Blocks(title="扭摆法测转动惯量") as demo:
-        with gr.Column(elem_id="session-bar"):
-            with gr.Row(elem_classes=["session-row"]):
-                student = gr.Textbox(
-                    label="学号", placeholder="例如 20260001", elem_id="student-id", scale=3,
-                    info="1～24 位数字；只用于保存记录，不发给 AI。")
-                start = gr.Button("开始学习", variant="primary", elem_id="start-learning", scale=0)
-                save_line = md("尚未开始", elem_id="save-line", scale=3)
-            with gr.Row(elem_classes=["session-actions"]):
-                tutor_launch = gr.Button("问助教", visible=False, elem_id="tutor-open", scale=0)
-                new = gr.Button("结束并新建会话", visible=False, interactive=False, scale=0)
-                retry = gr.Button("重试保存记录", visible=False, interactive=False, scale=0)
+        with gr.Column(elem_id="landing") as landing:
+            gr.HTML(LANDING_BG_HTML, elem_id="landing-bg")
+            with gr.Row(elem_id="hero-row"):
+                with gr.Column(elem_id="hero-copy"):
+                    gr.HTML(LANDING_HERO_HTML, elem_id="hero-html")
+                    pre_start = md(PRE_START_MD, elem_id="pre-start")
+                with gr.Column(elem_id="login-card"):
+                    gr.HTML(LOGIN_HEAD_HTML, elem_id="login-head")
+                    student = gr.Textbox(
+                        label="学号", placeholder="例如 20260001", elem_id="student-id",
+                        info="1～24 位数字；只用于保存记录，不发给 AI。")
+                    start = gr.Button("开始学习", variant="primary", elem_id="start-learning")
+                    with gr.Column(elem_id="demo-row"):
+                        demo_button = gr.Button("载入完整演示数据", variant="secondary",
+                                                elem_id="demo-start")
+                        demo_note = md("想直接验收？点上面的按钮，会创建一个所有阶段都填好的演示会话。",
+                                       elem_id="demo-note")
+            with gr.Accordion("使用流程与功能说明", open=True, elem_id="onboarding") as onboarding:
+                md(ONBOARDING_MD, elem_id="onboarding-md")
 
-        gr.HTML(HEADER_HTML)
-        with gr.Accordion("使用流程与功能说明", open=True, elem_id="onboarding") as onboarding:
-            md(ONBOARDING_MD, elem_id="onboarding-md")
+        with gr.Row(elem_id="app-bar", visible=False) as app_bar:
+            gr.HTML(APP_BRAND_HTML, elem_id="app-brand")
+            save_line = md("尚未开始", elem_id="save-line", scale=4)
+            new = gr.Button("结束并新建会话", visible=False, interactive=False, scale=0)
+            retry = gr.Button("重试保存记录", visible=False, interactive=False, scale=0)
+        tutor_launch = gr.Button("问助教", visible=False, elem_id="tutor-open", scale=0)
 
-        pre_start = md(PRE_START_MD, elem_id="pre-start")
-        with gr.Row(elem_id="demo-row"):
-            demo_button = gr.Button("载入完整演示数据", variant="secondary",
-                                    elem_id="demo-start")
-            demo_note = md("想直接验收？点左边按钮，会创建一个所有阶段都填好的演示会话。",
-                           elem_id="demo-note")
-
-        with gr.Row(elem_id="mode-row"):
+        with gr.Row(elem_id="mode-row", visible=False) as mode_row:
             mode = gr.Radio(
                 choices=[(experiment.MODE_LABELS[item], item) for item in experiment.MODES],
                 value=experiment.MODE_REAL, label="实验模式", elem_id="mode-select")
             md(MODE_NOTE, elem_id="mode-note")
 
-        with gr.Row(elem_id="stage-row"):
+        with gr.Row(elem_id="stage-row", visible=False) as stage_row:
             stage = gr.Radio(
                 choices=[(experiment.STAGE_LABELS[item], item) for item in experiment.STAGES],
                 value=experiment.STAGE_PARAMS, label="实验阶段", elem_id="stage-select")
             status = md("就绪", elem_id="learning-status")
-        stage_hint = md("", elem_id="stage-hint")
+        stage_hint = md("", elem_id="stage-hint", visible=False)
 
-        with gr.Row(elem_id="page-row"):
+        with gr.Row(elem_id="page-row", visible=False) as page_row:
             with gr.Column(scale=4, min_width=320, elem_id="work-column"):
                 with gr.Column(visible=False, elem_id="params-panel") as params_panel:
                     md("### 阶段0 器材参数\n\n先登记本次实验的器材和测量设置。"
@@ -1099,13 +1583,15 @@ def build_ui(handle, get_view_state):
                         md("### 当前记录")
                         summary_table_md = md("")
                         with gr.Row():
-                            export_csv = gr.Button("生成原始数据 CSV", variant="secondary")
+                            export_csv = gr.Button("生成原始数据 CSV", variant="secondary",
+                                                   scale=0)
                             md("生成后点下面的文件名下载；含阶段1～3 每组的总时间和周期。",
                                elem_id="csv-note")
                         csv_file = gr.File(label="原始数据 CSV", file_count="single",
                                            interactive=False, visible=False)
                         with gr.Row():
-                            export_docx = gr.Button("导出实验报告 .docx", variant="primary")
+                            export_docx = gr.Button("导出实验报告 .docx", variant="primary",
+                                                    scale=0)
                             md("含参数、数据表、结果和两张图；讨论与结论留空，自己写。",
                                elem_id="docx-note")
                         docx_file = gr.File(label="实验报告 .docx", file_count="single",
@@ -1156,6 +1642,8 @@ def build_ui(handle, get_view_state):
                                    elem_classes=["ask-sink"])
 
         controls = {
+            "landing": landing, "app_bar": app_bar,
+            "mode_row": mode_row, "stage_row": stage_row, "page_row": page_row,
             "student": student, "start": start, "save_line": save_line,
             "new": new, "retry": retry, "status": status,
             "onboarding": onboarding, "pre_start": pre_start,
@@ -1229,6 +1717,7 @@ def build_ui(handle, get_view_state):
         })
 
         outputs = [
+            landing, app_bar, mode_row, stage_row, page_row,
             student, start, save_line, new, retry, status, onboarding, pre_start,
             demo_button, demo_note,
             mode, stage, stage_hint, params_panel, real_params, virtual_params,
@@ -1292,7 +1781,7 @@ def build_ui(handle, get_view_state):
             ]
             kwargs = dict(fn=on_event, inputs=inputs, outputs=outputs,
                           concurrency_id="single_user", concurrency_limit=1,
-                          api_visibility="private")
+                          api_visibility="private", show_progress="hidden")
             if event == "click":
                 component.click(**kwargs)
             else:
@@ -1329,5 +1818,6 @@ def build_ui(handle, get_view_state):
         bind(stage, "set_exp_stage", event="input")
 
         demo.load(lambda: render_view(get_view_state(), controls), outputs=outputs, js=PAGE_JS,
-                  concurrency_id="single_user", concurrency_limit=1, api_visibility="private")
+                  concurrency_id="single_user", concurrency_limit=1, api_visibility="private",
+                  show_progress="hidden")
     return demo, controls
