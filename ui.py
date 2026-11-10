@@ -76,18 +76,10 @@ LANDING_HERO_HTML = """
 <div class="hero-copy">
   <p class="eyebrow"><span class="pip"></span>大学物理实验 · 扭摆法</p>
   <h1>扭摆法<br><em>测转动惯量</em></h1>
-  <p class="lede">从一次摆动读出转动惯量。登记器材、标定扭转常数、测规则刚体、验证平行轴定理，最后生成图表与实验报告。</p>
   <div class="hero-chips">
     <span>真实 / 虚拟双模式</span>
     <span>自动 A/B 类不确定度</span>
     <span>AI 只解释，不给答案</span>
-  </div>
-  <div class="flow">
-    <span><i>01</i>器材参数</span>
-    <span><i>02</i>标定</span>
-    <span><i>03</i>规则刚体</span>
-    <span><i>04</i>平行轴</span>
-    <span><i>05</i>报告</span>
   </div>
 </div>
 """
@@ -976,6 +968,7 @@ CSS += """
 /* —— 开始页做成固定全屏层，避免容器背景与宽度干扰 —— */
 #landing {
     position: fixed !important; inset: 0 !important;
+    display: block !important;
     width: auto !important; height: 100vh !important; min-height: 0 !important;
     overflow-y: auto !important; z-index: 60 !important; margin: 0 !important;
     background:
@@ -1102,6 +1095,43 @@ CSS += """
     background: transparent !important; color: #5c564e !important;
     -webkit-text-fill-color: #5c564e !important;
     font-size: 12px !important; letter-spacing: 0.03em; padding: 0 !important;
+}
+
+/* —— 开始页精简后的间距 —— */
+@media (min-width: 721px) {
+    #landing { padding-top: clamp(24px, 3vw, 40px) !important;
+        padding-bottom: 48px !important; }
+}
+.hero-copy h1 { margin-bottom: 12px; }
+.hero-chips { margin-bottom: 18px; }
+#pre-start { margin-top: 0; }
+#pre-start .prose h3 { margin-top: 0; margin-bottom: 8px; }
+#hero-row { gap: clamp(24px, 3.4vw, 56px); }
+#landing #onboarding-md p, #landing #onboarding-md li {
+    font-size: 14.5px !important; line-height: 1.7 !important;
+}
+
+/* —— 学号输入的文字必须是浅色，否则在深色卡上看不见 —— */
+#login-card textarea, #login-card textarea:focus,
+#login-card input, #login-card input:focus {
+    color: #f8f1e4 !important;
+    -webkit-text-fill-color: #f8f1e4 !important;
+    caret-color: #f8f1e4 !important;
+    background: transparent !important;
+}
+#login-card .input-container { color: #f8f1e4 !important; }
+
+/* —— 底部使用流程要清晰可见 —— */
+#landing #onboarding { margin-top: 22px !important; margin-bottom: 8px !important;
+    max-width: 1216px !important; }
+#landing #onboarding .label-wrap, #landing #onboarding .label-wrap span,
+#landing #onboarding button {
+    color: #e9c99b !important;
+    -webkit-text-fill-color: #e9c99b !important;
+}
+#landing #onboarding-md, #landing #onboarding-md * {
+    color: rgba(243, 234, 217, 0.78) !important;
+    -webkit-text-fill-color: rgba(243, 234, 217, 0.78) !important;
 }
 """
 
