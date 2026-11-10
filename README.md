@@ -96,6 +96,8 @@ CI 配置在 `.github/workflows/ci.yml`，推送到 GitHub 后会自动跑这两
 
 当前功能已覆盖真实/虚拟模式、阶段0～4、不确定度、AI 检查/回答批改/报告草稿、演示数据、CSV 导出、Word 报告导出和四边可调助教浮窗。已知限制见[开发记录](docs/开发记录.md)。
 
-## 许可证
+## 版权与许可
 
-MIT，见 [LICENSE](LICENSE)。
+© 2026 复旦大学物理系（Department of Physics, Fudan University）。本项目用于物理实验教学。
+
+代码以 MIT 许可证发布，见 [LICENSE](LICENSE)。
