@@ -8,6 +8,7 @@ env/
 
 # 本地数据、密钥和日志
 records/
+.pilot/
 填写密钥.txt
 .env
 .env.*

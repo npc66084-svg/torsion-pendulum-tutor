@@ -20,6 +20,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Unit tests
-        run: python -m pytest tests/test_uncertainty.py -q
-      - name: Smoke check
+        run: python -m pytest tests/test_uncertainty.py tests/test_pilot_sessions.py -q
+      - name: Smoke check single user
         run: python tests/smoke_check.py
+        env:
+          PILOT_MODE: "0"
+      - name: Smoke check pilot
+        run: python tests/smoke_check.py
+        env:
+          PILOT_MODE: "1"

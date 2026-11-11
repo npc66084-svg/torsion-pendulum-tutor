@@ -1382,11 +1382,20 @@ def render_view(state, controls):
     for key in experiment.FIELD_KEYS:
         updates[controls[key]] = gr.update(value=state.get(key, ""),
                                            interactive=ready and state["can_edit_params"])
+    if "session_token" in controls and "session_token" in state:
+        updates[controls["session_token"]] = state["session_token"]
     return updates
 
 
-def build_ui(handle, get_view_state):
+def build_ui(handle, get_view_state, pilot=False, open_browser=None):
+    if pilot and open_browser is None:
+        raise ValueError("试点界面需要 open_browser。")
     with gr.Blocks(title="扭摆法测转动惯量") as demo:
+        session_token = gr.BrowserState(
+            default_value="",
+            storage_key="torsion-pilot-session",
+            secret="torsion-lan-pilot-v1",
+        ) if pilot else None
         with gr.Column(elem_id="landing") as landing:
             gr.HTML(LANDING_BG_HTML, elem_id="landing-bg")
             with gr.Row(elem_id="hero-row"):
@@ -1877,6 +1886,8 @@ def build_ui(handle, get_view_state):
             "p_balance": p_balance, "p_caliper": p_caliper, "p_ruler": p_ruler,
             "p_note": p_note,
         })
+        if pilot:
+            controls["session_token"] = session_token
 
         outputs = [
             landing, app_bar, mode_row, stage_row, page_row,
@@ -1913,13 +1924,23 @@ def build_ui(handle, get_view_state):
             p_n, p_angle, p_timer, p_balance, p_caliper, p_ruler,
             *[param_fields[key] for key in param_fields], p_note,
         ]
+        if pilot:
+            outputs = [session_token, *outputs]
 
         def on_event(*args):
-            for view in handle(*args):
-                yield render_view(view, controls)
+            if pilot:
+                token, event_args = args[0], args[1:]
+                for view in handle(*event_args, session_token=token):
+                    yield render_view(view, controls)
+            else:
+                for view in handle(*args):
+                    yield render_view(view, controls)
 
         def bind(component, action, event="click"):
-            inputs = [
+            inputs = []
+            if pilot:
+                inputs.append(session_token)
+            inputs.extend([
                 gr.State(action), student, gr.State("calibrate"), gr.State(None),
                 gr.State(10), gr.State(0), ask_box, gr.State("same"),
                 gr.State(None), gr.State(None), gr.State(None),
@@ -1944,10 +1965,12 @@ def build_ui(handle, get_view_state):
                 par_slope_sym, par_intercept_sym, par_slope_asym, par_intercept_asym,
                 par_q1, par_q2, par_q3,
                 cal_group_pick, shp_group_pick, par_group_pick,
-            ]
+            ])
             kwargs = dict(fn=on_event, inputs=inputs, outputs=outputs,
-                          concurrency_id="single_user", concurrency_limit=1,
                           api_visibility="private", show_progress="hidden")
+            if not pilot:
+                kwargs["concurrency_id"] = "single_user"
+                kwargs["concurrency_limit"] = 1
             if event == "click":
                 component.click(**kwargs)
             else:
@@ -1990,7 +2013,14 @@ def build_ui(handle, get_view_state):
         bind(mode, "set_mode", event="input")
         bind(stage, "set_exp_stage", event="input")
 
-        demo.load(lambda: render_view(get_view_state(), controls), outputs=outputs, js=PAGE_JS,
-                  concurrency_id="single_user", concurrency_limit=1, api_visibility="private",
-                  show_progress="hidden")
+        if pilot:
+            def on_load(token):
+                return render_view(open_browser(token), controls)
+
+            demo.load(on_load, inputs=[session_token], outputs=outputs, js=PAGE_JS,
+                      api_visibility="private", show_progress="hidden")
+        else:
+            demo.load(lambda: render_view(get_view_state(), controls), outputs=outputs, js=PAGE_JS,
+                      concurrency_id="single_user", concurrency_limit=1, api_visibility="private",
+                      show_progress="hidden")
     return demo, controls

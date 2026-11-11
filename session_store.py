@@ -1,7 +1,8 @@
-"""单用户记录：按学号与开始时间归档；内存数组不写入 JSON。"""
+"""按学号与开始时间归档；内存数组不写入 JSON。同目录写入串行，并维护 index.json。"""
 import hashlib
 import json
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -53,18 +54,60 @@ def create_session(student_id, root, model):
     return session
 
 
+_WRITE_LOCKS = {}
+_WRITE_GUARD = threading.Lock()
+
+
+def _write_lock(path):
+    key = str(Path(path).parent)
+    with _WRITE_GUARD:
+        lock = _WRITE_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _WRITE_LOCKS[key] = lock
+        return lock
+
+
+def _write_index(session, path):
+    index = path.parent / "index.json"
+    payload = {
+        "schema_version": session.get("schema_version") or "1.2",
+        "student_id": session.get("student_id"),
+        "latest": path.name,
+        "session_id": session.get("session_id"),
+        "updated_at": session.get("updated_at"),
+    }
+    temp = index.with_name(f"index.json.{uuid4().hex}.tmp")
+    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(index)
+
+
 def save_session(session):
     session["updated_at"] = now()
     path = session["_path"]
     data = {k: v for k, v in session.items() if not k.startswith("_")}
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temp = path.with_suffix(".tmp")
-        temp.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
-        temp.replace(path)
-        session["_save_status"] = "已保存"
-    except (OSError, ValueError):
-        session["_save_status"] = "保存失败：记录仍在内存，请检查目录权限或磁盘后重试。"
+    lock = _write_lock(path)
+    temp = None
+    with lock:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temp = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+            temp.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False),
+                encoding="utf-8")
+            temp.replace(path)
+            try:
+                _write_index(session, path)
+            except OSError:
+                pass
+            session["_save_status"] = "已保存"
+        except (OSError, ValueError):
+            if temp is not None:
+                try:
+                    temp.unlink()
+                except OSError:
+                    pass
+            session["_save_status"] = "保存失败：记录仍在内存，请检查目录权限或磁盘后重试。"
 
 
 def append_event(session, event_type, source, **content):
