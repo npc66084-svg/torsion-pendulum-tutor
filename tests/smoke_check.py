@@ -182,7 +182,7 @@ def main():
     assert initial["mode"] == "real" and initial["exp_stage"] == "params"
     assert initial["params_visible"] and initial["real_params_visible"]
     assert not initial["virtual_params_visible"] and not initial["later_visible"]
-    assert initial["onboarding_open"]
+    assert not initial["tutor_open"] and initial["dock_tab"] == "guide"
     assert "阶段0" in initial["stage_hint"] and "阶段0" in initial["stage_placeholder"]
     assert "assembly" not in controls and "distance" not in controls
     assert "mode" in controls and "stage" in controls and "params_panel" in controls
@@ -192,6 +192,20 @@ def main():
     assert not before[controls["params_panel"]]["visible"]
     assert before[controls["pre_start"]]["visible"]
     assert not before[controls["tutor_dock"]]["visible"]
+    assert before[controls["guide_launch"]]["visible"]
+    assert before[controls["principle_launch"]]["visible"]
+    assert not before[controls["tutor_launch"]]["visible"]
+    assert "3 分钟上手" in ui.ONBOARDING_MD and "原理" in ui.PRINCIPLE
+    landing_dock = list(scope["handle"](
+        "open_guide", "20260001", "calibrate", "carrier", 10, 0, ""))[-1]
+    assert landing_dock["tutor_open"] and landing_dock["dock_tab"] == "guide"
+    landing_paint = ui.render_view(landing_dock, controls)
+    assert landing_paint[controls["tutor_dock"]]["visible"]
+    assert landing_paint[controls["dock_guide_pane"]]["visible"]
+    assert not landing_paint[controls["tutor_launch"]]["visible"]
+    closed = list(scope["handle"](
+        "close_tutor", "20260001", "calibrate", "carrier", 10, 0, ""))[-1]
+    assert not closed["tutor_open"]
     assert all(isinstance(key, str) for key in initial)
     try:
         with tempfile.TemporaryDirectory(prefix="torsion_check_") as directory:
@@ -204,7 +218,7 @@ def main():
             scope["set_task"]("calibrate")
             opened = app.get_view_state()
             assert opened["can_run"] and opened["can_check"] and opened["can_write"]
-            assert not opened["onboarding_open"] and "金属载物盘" in opened["next_step_md"]
+            assert "金属载物盘" in opened["next_step_md"]
             assert "塑料圆柱放到载物盘上" in opened["task_description"]
             assert "金属载物盘 — 未测" in opened["task_description"]
             assert "先预测并说明理由" not in opened["task_description"]

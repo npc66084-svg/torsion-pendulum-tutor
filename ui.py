@@ -1,4 +1,4 @@
-﻿"""双模式、阶段导航、阶段0参数页；阶段1～4先放占位。"""
+"""双模式、阶段导航、阶段0参数页；阶段1～4先放占位。"""
 from pathlib import Path
 import gradio as gr
 import experiment
@@ -22,10 +22,18 @@ def _student_manual():
     return text.replace("\\[", "$$").replace("\\]", "$$")
 
 
+def _principle_guide():
+    text = (Path(__file__).resolve().parent / "knowledge" / "principle_guide.md").read_text(encoding="utf-8")
+    return text.replace("\\[", "$$").replace("\\]", "$$")
+
+
 MANUAL = _student_manual()
+PRINCIPLE = _principle_guide()
 
 ONBOARDING_MD = r"""
 ### 3 分钟上手
+
+（实验过程中随时可以从右下角的「使用指南」再次打开。）
 
 1. **选模式**：真实实验模式记录你自己测的数据；虚拟实验模式的器材参数由程序给定，周期由点击生成。
 2. **阶段0 器材参数**：登记质量、直径、长度和测量设置。参数随时可改、可追加；每保存一次生成一个新版本。
@@ -530,13 +538,6 @@ header.lab-head .chips span {
 }
 #session-bar .session-row { align-items: center; gap: 8px; }
 #session-bar .session-actions { justify-content: flex-end; gap: 8px; }
-#onboarding {
-    background: #fffdf8 !important; border: 1px solid #e4d9cc;
-    border-radius: 18px; margin: 0 0 12px;
-    box-shadow: 0 10px 26px rgba(48, 36, 24, 0.05);
-}
-#onboarding .label-wrap { font-size: 17px; font-weight: 700; color: #1b3a4b !important; }
-#onboarding-md p, #onboarding-md li { font-size: 16px; line-height: 1.75; }
 #mode-row, #stage-row {
     background: #fffdf8 !important; border: 1px solid #e4d9cc;
     border-radius: 18px; padding: 10px 16px; margin: 0 0 10px;
@@ -604,19 +605,33 @@ header.lab-head .chips span {
 }
 #param-preview p, #param-preview li { font-size: 14px; line-height: 1.65; }
 #stage-placeholder p, #stage-placeholder li { font-size: 15px; line-height: 1.8; }
-#tutor-open {
-    position: fixed !important; right: 18px !important; bottom: 18px !important;
+#tutor-open, #guide-open, #principle-open {
+    position: fixed !important; right: 18px !important;
     left: auto !important; top: auto !important; width: max-content !important;
-    min-width: 0 !important; z-index: 45; margin: 0 !important;
-    box-shadow: 0 12px 30px rgba(27, 58, 75, 0.22); border-radius: 999px !important;
+    min-width: 0 !important; z-index: 70; margin: 0 !important;
+    border-radius: 999px !important;
+}
+#tutor-open {
+    bottom: 18px !important;
+    box-shadow: 0 12px 30px rgba(27, 58, 75, 0.22);
+}
+#guide-open { bottom: 72px !important; }
+#principle-open { bottom: 126px !important; }
+#guide-open, #principle-open {
+    background: rgba(255, 253, 248, 0.94) !important; color: #1b3a4b !important;
+    border: 1px solid rgba(27, 58, 75, 0.16) !important;
+    box-shadow: 0 10px 24px rgba(27, 58, 75, 0.14) !important;
+}
+#guide-open:hover, #principle-open:hover {
+    border-color: #1f6f6a !important; color: #1f6f6a !important;
 }
 #tutor-dock, #tutor-dock.tutor-open {
     position: fixed !important; top: 12px; right: 12px; bottom: auto;
-    left: auto !important; width: min(410px, calc(100vw - 24px));
+    left: auto !important; width: min(430px, calc(100vw - 24px));
     min-width: 320px; max-width: calc(100vw - 24px);
     height: min(760px, calc(100vh - 24px)); min-height: 400px;
     max-height: calc(100vh - 24px);
-    z-index: 50; margin: 0 !important; overflow: auto;
+    z-index: 75; margin: 0 !important; overflow: hidden;
     display: flex !important; flex-direction: column !important;
     align-items: stretch !important; gap: 8px;
     resize: none; box-sizing: border-box;
@@ -625,8 +640,39 @@ header.lab-head .chips span {
 }
 #tutor-dock > .wrap.hide { display: none !important; }
 #tutor-dock #tutor-head { flex: 0 0 auto; width: 100% !important; }
+#tutor-dock #dock-tabs {
+    flex: 0 0 auto; width: 100% !important;
+    gap: 6px !important; padding: 0 0 4px !important;
+    border-bottom: 1px solid rgba(27, 58, 75, 0.1);
+}
+#tutor-dock #dock-tabs button {
+    flex: 0 0 auto !important; width: auto !important;
+    border-radius: 999px !important; font-size: 12.5px !important;
+    padding: 5px 12px !important; min-width: 0 !important;
+    box-shadow: none !important;
+}
+#tutor-dock #dock-pane-guide, #tutor-dock #dock-pane-principle {
+    flex: 1 1 0 !important; min-height: 0 !important;
+    overflow-y: auto !important; padding: 2px 2px 10px;
+}
+#tutor-dock #dock-pane-tutor {
+    flex: 1 1 0 !important; min-height: 0 !important;
+    display: flex !important; flex-direction: column !important; gap: 8px;
+    width: 100% !important;
+}
+#tutor-dock #dock-guide-md p, #tutor-dock #dock-guide-md li {
+    font-size: 14.5px; line-height: 1.72;
+}
+#tutor-dock #dock-principle-md h2 {
+    font-size: 16.5px; margin: 16px 0 6px; color: #1b3a4b;
+}
+#tutor-dock #dock-principle-md h2:first-child { margin-top: 2px; }
+#tutor-dock #dock-principle-md p, #tutor-dock #dock-principle-md li {
+    font-size: 13.5px; line-height: 1.75;
+}
+#tutor-dock #dock-principle-md .katex-display { margin: 6px 0 10px; }
 #tutor-dock #tutor-chat { flex: 1 1 0 !important; width: 100% !important;
-    min-height: 240px !important; height: auto !important; }
+    min-height: 200px !important; height: auto !important; }
 #tutor-dock #tutor-chat .bubble-wrap { height: 100% !important; }
 #tutor-dock.tutor-resize-hover { border-color: #1f6f6a !important; }
 #tutor-dock.tutor-resizing {
@@ -637,9 +683,12 @@ header.lab-head .chips span {
 #tutor-head .prose { flex: 1; }
 #tutor-head h3 { margin: 0; font-size: 20px; color: #1b3a4b; }
 #tutor-head p { margin: 2px 0 0; font-size: 13px; color: #5c564e; }
-#tutor-close { min-width: 64px; }
+#tutor-dock #dock-sub { flex: 0 0 auto; }
+#tutor-dock #dock-sub p { margin: 0; font-size: 12px; line-height: 1.5; color: #6d675f;
+    font-weight: 400; }
+#tutor-close { flex: 0 0 auto !important; width: auto !important; min-width: 64px; }
 body:has(#tutor-dock.tutor-open) .gradio-container {
-    padding-right: min(430px, 46vw); box-sizing: border-box;
+    padding-right: min(450px, 46vw); box-sizing: border-box;
 }
 body:has(#tutor-dock.tutor-open) .lab-head { grid-template-columns: 1fr; }
 body:has(#tutor-dock.tutor-open) .lab-head-art { display: none; }
@@ -830,17 +879,16 @@ body { overflow-x: hidden; }
     border: 1px dashed rgba(233, 201, 155, 0.35) !important; }
 #demo-note p { margin: 0; font-size: 12px; line-height: 1.6;
     color: rgba(243, 234, 217, 0.5) !important; }
-
-#landing #onboarding {
-    position: relative; z-index: 2; max-width: 1340px; margin: 42px auto 0;
-    background: rgba(255, 255, 255, 0.03) !important;
-    border: 1px solid rgba(233, 201, 155, 0.16) !important;
-    border-radius: 18px; box-shadow: none;
+#landing-guide-note p { margin: 12px 0 0; font-size: 12px; line-height: 1.6;
+    text-align: center; color: rgba(243, 234, 217, 0.55) !important; }
+#landing-help-row { display: none !important; gap: 8px !important; margin-top: 10px; }
+#landing-help-row button {
+    flex: 1 1 0 !important; border-radius: 999px !important;
+    font-size: 12.5px !important; padding: 6px 10px !important;
+    background: rgba(255, 255, 255, 0.06) !important; color: #e9c99b !important;
+    border: 1px solid rgba(233, 201, 155, 0.3) !important;
 }
-#landing #onboarding .label-wrap { color: #e2b982 !important; }
-#landing #onboarding-md p, #landing #onboarding-md li {
-    color: rgba(243, 234, 217, 0.66) !important; }
-#landing #onboarding-md strong { color: #f2e4cd !important; }
+#landing-help-row button:hover { border-color: #e9c99b !important; }
 
 /* ================= 工作台 ================= */
 #app-shell { max-width: 1360px; margin: 0 auto; padding: 12px 0 48px; }
@@ -941,6 +989,16 @@ body { overflow-x: hidden; }
     #hero-copy h1 { font-size: 36px; }
     .hero-copy .lede { font-size: 13.5px; }
     .flow span { margin-right: 10px; padding-right: 12px; font-size: 11px; }
+    #landing-help-row { display: flex !important; }
+    #landing ~ #guide-open,
+    #landing ~ #principle-open { display: none !important; }
+    #tutor-open, #guide-open, #principle-open {
+        font-size: 12.5px !important; padding: 6px 12px !important;
+        min-height: 0 !important; line-height: 1.2 !important;
+    }
+    #tutor-open { bottom: 14px !important; }
+    #guide-open { bottom: 56px !important; }
+    #principle-open { bottom: 98px !important; }
     #app-bar { flex-wrap: wrap; padding: 8px 0 !important; }
     #app-brand { flex: 1 1 100% !important; }
     #save-line { flex: 1 1 auto !important; }
@@ -978,7 +1036,6 @@ CSS += """
 }
 #landing-bg { position: absolute !important; inset: 0 !important; z-index: -1 !important; }
 #hero-row { position: relative; z-index: 1; margin-left: auto; margin-right: auto; }
-#landing #onboarding { position: relative; z-index: 1; }
 
 /* —— 修正：开始页内容宽度与登录卡样式 —— */
 #landing {
@@ -1073,18 +1130,6 @@ CSS += """
 #mode-row { padding: 10px 16px !important; }
 #mode-note p { font-size: 12px; }
 #pre-start { border: none !important; box-shadow: none !important; padding: 0 !important; }
-#landing #onboarding { color: rgba(243, 234, 217, 0.72) !important; }
-#landing #onboarding .label-wrap, #landing #onboarding button,
-#landing #onboarding .label-wrap span {
-    color: #e2b982 !important; -webkit-text-fill-color: #e2b982 !important;
-}
-#landing #onboarding-md, #landing #onboarding-md * {
-    color: rgba(243, 234, 217, 0.72) !important;
-    -webkit-text-fill-color: rgba(243, 234, 217, 0.72) !important;
-}
-#landing #onboarding-md strong {
-    color: #f2e4cd !important; -webkit-text-fill-color: #f2e4cd !important;
-}
 
 /* —— 摆锤放在登录卡下方右侧 —— */
 .pendulum-art { right: 2% !important; top: 47% !important;
@@ -1107,9 +1152,6 @@ CSS += """
 #pre-start { margin-top: 0; }
 #pre-start .prose h3 { margin-top: 0; margin-bottom: 8px; }
 #hero-row { gap: clamp(24px, 3.4vw, 56px); }
-#landing #onboarding-md p, #landing #onboarding-md li {
-    font-size: 14.5px !important; line-height: 1.7 !important;
-}
 
 /* —— 学号输入的文字必须是浅色，否则在深色卡上看不见 —— */
 #login-card textarea, #login-card textarea:focus,
@@ -1120,19 +1162,6 @@ CSS += """
     background: transparent !important;
 }
 #login-card .input-container { color: #f8f1e4 !important; }
-
-/* —— 底部使用流程要清晰可见 —— */
-#landing #onboarding { margin-top: 22px !important; margin-bottom: 8px !important;
-    max-width: 1216px !important; }
-#landing #onboarding .label-wrap, #landing #onboarding .label-wrap span,
-#landing #onboarding button {
-    color: #e9c99b !important;
-    -webkit-text-fill-color: #e9c99b !important;
-}
-#landing #onboarding-md, #landing #onboarding-md * {
-    color: rgba(243, 234, 217, 0.78) !important;
-    -webkit-text-fill-color: rgba(243, 234, 217, 0.78) !important;
-}
 """
 
 
@@ -1152,7 +1181,6 @@ def render_view(state, controls):
         controls["new"]: gr.update(visible=active, interactive=ready),
         controls["retry"]: gr.update(visible=state["save_failed"], interactive=ready),
         controls["status"]: status,
-        controls["onboarding"]: gr.update(open=state["onboarding_open"]),
         controls["pre_start"]: gr.update(visible=not active),
         controls["demo_button"]: gr.update(visible=not active, interactive=state["can_start"]),
         controls["demo_note"]: gr.update(
@@ -1259,12 +1287,27 @@ def render_view(state, controls):
         controls["param_versions_md"]: state["param_versions_md"],
         controls["param_preview_md"]: state["param_preview_md"],
         controls["virtual_param_md"]: state["virtual_param_md"],
+        controls["guide_launch"]: gr.update(visible=not state["tutor_open"]),
+        controls["principle_launch"]: gr.update(visible=not state["tutor_open"]),
         controls["tutor_launch"]: gr.update(visible=active and not state["tutor_open"],
                                             interactive=ready, value=state["tutor_label"]),
         controls["tutor_dock"]: gr.update(
-            visible=active and state["tutor_open"],
+            visible=state["tutor_open"],
             elem_classes=["tutor-open"] if state["tutor_open"] else []),
-        controls["tutor_close"]: gr.update(interactive=ready),
+        controls["dock_tab_guide"]: gr.update(
+            variant="primary" if state["dock_tab"] == "guide" else "secondary"),
+        controls["dock_tab_principle"]: gr.update(
+            variant="primary" if state["dock_tab"] == "principle" else "secondary"),
+        controls["dock_tab_tutor"]: gr.update(
+            variant="primary" if state["dock_tab"] == "tutor" else "secondary",
+            interactive=active),
+        controls["dock_guide_pane"]: gr.update(
+            visible=state["tutor_open"] and state["dock_tab"] == "guide"),
+        controls["dock_principle_pane"]: gr.update(
+            visible=state["tutor_open"] and state["dock_tab"] == "principle"),
+        controls["dock_tutor_pane"]: gr.update(
+            visible=state["tutor_open"] and state["dock_tab"] == "tutor"),
+        controls["tutor_close"]: gr.update(interactive=True),
         controls["ask"]: gr.update(interactive=active and ready),
         controls["hint"]: gr.update(interactive=active and ready),
         controls["ask_box"]: gr.update(value=state["ask_draft"], interactive=active and ready),
@@ -1296,14 +1339,20 @@ def build_ui(handle, get_view_state):
                                                 elem_id="demo-start")
                         demo_note = md("想直接验收？点上面的按钮，会创建一个所有阶段都填好的演示会话。",
                                        elem_id="demo-note")
-            with gr.Accordion("使用流程与功能说明", open=True, elem_id="onboarding") as onboarding:
-                md(ONBOARDING_MD, elem_id="onboarding-md")
+                    md("第一次用？打开「使用指南」，3 分钟上手随时可以重新打开。",
+                       elem_id="landing-guide-note")
+                    with gr.Row(elem_id="landing-help-row"):
+                        landing_help = gr.Button("3 分钟上手", size="sm", elem_id="landing-help")
+                        landing_principle = gr.Button("实验原理", size="sm",
+                                                     elem_id="landing-principle")
 
         with gr.Row(elem_id="app-bar", visible=False) as app_bar:
             gr.HTML(APP_BRAND_HTML, elem_id="app-brand")
             save_line = md("尚未开始", elem_id="save-line", scale=4)
             new = gr.Button("结束并新建会话", visible=False, interactive=False, scale=0)
             retry = gr.Button("重试保存记录", visible=False, interactive=False, scale=0)
+        guide_launch = gr.Button("使用指南", visible=False, elem_id="guide-open", scale=0)
+        principle_launch = gr.Button("实验原理", visible=False, elem_id="principle-open", scale=0)
         tutor_launch = gr.Button("问助教", visible=False, elem_id="tutor-open", scale=0)
 
         with gr.Row(elem_id="mode-row", visible=False) as mode_row:
@@ -1627,27 +1676,39 @@ def build_ui(handle, get_view_state):
                         docx_file = gr.File(label="实验报告 .docx", file_count="single",
                                             interactive=False, visible=False)
                     with gr.Column(elem_classes=["card"]):
+                        md("### 生成图表\n\n先出图，再根据图和已记录的数据生成报告草稿。")
+                        draw_summary = gr.Button("生成阶段2/3 图", variant="primary")
+                        summary_chart_note = md("点按钮后生成阶段2 和阶段3 的图；不会自动提交。")
+                    with gr.Column(elem_classes=["card"]):
                         md("### 阶段2：I实验 / I几何")
                         summary_shapes_plot = gr.Plot(label="阶段2 I实验 / I几何")
                     with gr.Column(elem_classes=["card"]):
                         md("### 阶段3：I总–距离平方")
                         summary_parallel_plot = gr.Plot(label="阶段3 I–距离平方")
                     with gr.Column(elem_classes=["card"]):
+                        md("### 生成实验报告草稿")
                         generate_summary = gr.Button("生成实验报告草稿", variant="primary")
                         summary_text = md("")
-                    with gr.Column(elem_classes=["card"]):
-                        md("### 生成图表")
-                        draw_summary = gr.Button("生成阶段2/3 图", variant="primary")
-                        summary_chart_note = md("点按钮后生成阶段2 和阶段3 的图；不会自动提交。")
 
                 with gr.Column(visible=False, elem_id="later-panel") as later_panel:
                     with gr.Column(elem_classes=["card"]):
                         stage_placeholder = md("", elem_id="stage-placeholder")
 
-            with gr.Column(visible=False, scale=0, min_width=0, elem_id="tutor-dock") as tutor_dock:
-                with gr.Row(elem_id="tutor-head"):
-                    md("### 实验助教\n\n选中页面文字会填进这里；发送前可以改。可拖动四边或角调整大小。")
-                    tutor_close = gr.Button("收起", elem_id="tutor-close")
+        with gr.Column(visible=False, scale=0, min_width=0, elem_id="tutor-dock") as tutor_dock:
+            with gr.Row(elem_id="tutor-head"):
+                md("### 实验帮助")
+                tutor_close = gr.Button("收起", elem_id="tutor-close")
+            md("3 分钟上手、完整实验原理和实验助教都在这里；可拖动四边或角调整大小。",
+               elem_id="dock-sub")
+            with gr.Row(elem_id="dock-tabs"):
+                dock_tab_guide = gr.Button("3 分钟上手", size="sm", elem_id="dock-tab-guide")
+                dock_tab_principle = gr.Button("实验原理", size="sm", elem_id="dock-tab-principle")
+                dock_tab_tutor = gr.Button("问助教", size="sm", elem_id="dock-tab-tutor")
+            with gr.Column(visible=True, elem_id="dock-pane-guide") as dock_guide_pane:
+                md(ONBOARDING_MD, elem_id="dock-guide-md")
+            with gr.Column(visible=False, elem_id="dock-pane-principle") as dock_principle_pane:
+                md(PRINCIPLE, elem_id="dock-principle-md")
+            with gr.Column(visible=False, elem_id="dock-pane-tutor") as dock_tutor_pane:
                 chat = gr.Chatbot(
                     label="实验助教", height="100%", min_height=240,
                     group_consecutive_messages=False, layout="bubble",
@@ -1676,7 +1737,7 @@ def build_ui(handle, get_view_state):
             "mode_row": mode_row, "stage_row": stage_row, "page_row": page_row,
             "student": student, "start": start, "save_line": save_line,
             "new": new, "retry": retry, "status": status,
-            "onboarding": onboarding, "pre_start": pre_start,
+            "pre_start": pre_start,
             "demo_button": demo_button, "demo_note": demo_note,
             "mode": mode, "stage": stage, "stage_hint": stage_hint,
             "params_panel": params_panel, "real_params": real_params,
@@ -1735,7 +1796,13 @@ def build_ui(handle, get_view_state):
             "version_pick": version_pick,
             "param_active_md": param_active_md, "param_versions_md": param_versions_md,
             "param_preview_md": param_preview_md, "virtual_param_md": virtual_param_md,
+            "guide_launch": guide_launch, "principle_launch": principle_launch,
             "tutor_launch": tutor_launch, "tutor_dock": tutor_dock, "tutor_close": tutor_close,
+            "dock_tab_guide": dock_tab_guide, "dock_tab_principle": dock_tab_principle,
+            "dock_tab_tutor": dock_tab_tutor,
+            "dock_guide_pane": dock_guide_pane,
+            "dock_principle_pane": dock_principle_pane,
+            "dock_tutor_pane": dock_tutor_pane,
             "chat": chat, "ask_box": ask_box, "ask": ask, "hint": hint,
             "cite_text": cite_text, "cite_selection": cite_selection,
         }
@@ -1748,7 +1815,7 @@ def build_ui(handle, get_view_state):
 
         outputs = [
             landing, app_bar, mode_row, stage_row, page_row,
-            student, start, save_line, new, retry, status, onboarding, pre_start,
+            student, start, save_line, new, retry, status, pre_start,
             demo_button, demo_note,
             mode, stage, stage_hint, params_panel, real_params, virtual_params,
             cal_panel, cal_groups_md, cal_preview_md, cal_i1, cal_k, cal_i0,
@@ -1772,7 +1839,11 @@ def build_ui(handle, get_view_state):
             draw_summary, summary_chart_note,
             later_panel, stage_placeholder, save_param, load_param,
             version_pick, param_active_md, param_versions_md, param_preview_md,
-            virtual_param_md, tutor_launch, tutor_dock, tutor_close, chat, ask, hint,
+            virtual_param_md, guide_launch, principle_launch,
+            tutor_launch, tutor_dock, tutor_close,
+            dock_tab_guide, dock_tab_principle, dock_tab_tutor,
+            dock_guide_pane, dock_principle_pane, dock_tutor_pane,
+            chat, ask, hint,
             ask_box, cite_selection,
             p_n, p_angle, p_timer, p_balance, p_caliper, p_ruler,
             *[param_fields[key] for key in param_fields], p_note,
@@ -1839,6 +1910,13 @@ def build_ui(handle, get_view_state):
             (export_csv, "export_csv"),
             (export_docx, "export_docx"),
             (draw_summary, "draw_summary"),
+            (guide_launch, "open_guide"),
+            (principle_launch, "open_principle"),
+            (landing_help, "open_guide"),
+            (landing_principle, "open_principle"),
+            (dock_tab_guide, "dock_guide"),
+            (dock_tab_principle, "dock_principle"),
+            (dock_tab_tutor, "dock_tutor"),
             (tutor_launch, "open_tutor"),
             (tutor_close, "close_tutor"), (ask, "ask"), (hint, "hint"),
             (cite_selection, "cite_selection"),

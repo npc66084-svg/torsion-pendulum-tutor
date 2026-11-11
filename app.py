@@ -61,6 +61,9 @@ MATERIALS = load_materials(PROJECT)
 MODEL = os.getenv("TUTOR_MODEL", "")
 session = None  # 明确采用本地单用户状态，不支持同时打开多个学习页面。
 params = DEFAULTS.copy()
+# 帮助浮窗是全局界面状态：开始页也能打开上手/原理，开始学习后还能切到问助教。
+DOCK = {"open": False, "tab": "guide"}
+DOCK_TABS = ("guide", "principle", "tutor")
 
 
 def execute_tool(name, arguments, source):
@@ -1043,8 +1046,12 @@ def get_view_state(message="就绪", busy=False, clear=False):
         stored_record = record_selected
     reply_count = 0 if not active else sum(
         1 for event in session["records"] if event.get("type") in ("assistant", "model_error"))
-    tutor_open = bool(active and session.get("_tutor_open"))
-    unread = active and not tutor_open and reply_count > int(session.get("_tutor_seen") or 0)
+    tutor_open = bool(DOCK["open"])
+    dock_tab = DOCK["tab"] if DOCK["tab"] in DOCK_TABS else "guide"
+    if not active and dock_tab == "tutor":
+        dock_tab = "guide"  # 还没有学习会话时，助教标签没有内容可看
+    unread = (active and not (tutor_open and dock_tab == "tutor")
+              and reply_count > int(session.get("_tutor_seen") or 0))
     check_note = ("算出之后把数填在这里。核对只说明是否相符，或更接近哪一种常见算错，不给标准数值。")
     if active and session.get("_last_check"):
         check_note = session["_last_check"]
@@ -1096,7 +1103,6 @@ def get_view_state(message="就绪", busy=False, clear=False):
         calibration_hint=calibration_hint, section=section,
         section_hint=SECTION_HINTS[section],
         progress_html=progress_value, next_step_md=next_step_md,
-        onboarding_open=not active,
         diagram_html=_diagram_for(task_id, latest),
         compare_choices=compare_choices, compare_ids=compare_ids,
         compare_summaries=compare_summaries, compare_note=compare_note,
@@ -1110,6 +1116,7 @@ def get_view_state(message="就绪", busy=False, clear=False):
         correct_choices=correct_choices, correct_id=stored_correct,
         record_choices=record_choices, record_id=stored_record,
         tutor_open=tutor_open,
+        dock_tab=dock_tab,
         tutor_label="问助教 · 有新回复" if unread else "问助教",
         ask_draft=(session or {}).get("_ask_draft") or "" if active else "",
         reading_mode=_reading_mode(session) if active else "latest",
@@ -1142,6 +1149,7 @@ def start_learning(student_id):
     session["_param_forms"] = {}
     session["_par_show"] = False
     session["_summary_show"] = False
+    _close_dock()
     set_task("calibrate")
     return "已开始。"
 
@@ -1157,6 +1165,7 @@ def seed_demo_data():
     session["_param_forms"] = {}
     session["_par_show"] = False
     session["_summary_show"] = False
+    _close_dock()
     set_task("calibrate")
     state = experiment.ensure_state(session)
     version = experiment.add_version(
@@ -1253,6 +1262,7 @@ def end_session():
     if session["_save_status"] != "已保存":
         raise ValueError("记录未保存成功，请先重试保存，再结束会话。")
     session = None
+    _close_dock()
     params.update(DEFAULTS)
     return "旧会话已保存；可修改学号并开始新会话。"
 
@@ -1431,10 +1441,44 @@ def _clean_quote(text):
     return cleaned[:600]
 
 
+def _open_dock(tab):
+    DOCK["open"] = True
+    DOCK["tab"] = tab if tab in DOCK_TABS else "guide"
+
+
+def _close_dock():
+    DOCK["open"] = False
+
+
+DOCK_ACTIONS = {
+    "open_guide": "guide", "dock_guide": "guide",
+    "open_principle": "principle", "dock_principle": "principle",
+    "open_tutor": "tutor", "dock_tutor": "tutor",
+}
+DOCK_DONE = {
+    "guide": "已打开 3 分钟上手。",
+    "principle": "已打开实验原理。",
+    "tutor": "实验助教已打开。写好问题再发送。",
+}
+
+
+def _dock_action(action):
+    if action == "close_tutor":
+        _close_dock()
+        return "已收起实验帮助。"
+    tab = DOCK_ACTIONS.get(action, "guide")
+    if tab == "tutor":
+        _open_tutor()
+    else:
+        _open_dock(tab)
+    return DOCK_DONE[tab]
+
+
 def _open_tutor():
-    session["_tutor_open"] = True
-    session["_tutor_seen"] = sum(
-        1 for event in session["records"] if event.get("type") in ("assistant", "model_error"))
+    _open_dock("tutor")
+    if session is not None:
+        session["_tutor_seen"] = sum(
+            1 for event in session["records"] if event.get("type") in ("assistant", "model_error"))
 
 
 def _quote_case(case_id):
@@ -1741,6 +1785,10 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
            cal_group_pick=None, shp_group_pick=None, par_group_pick=None):
     """串行界面入口。新参数只加在末尾，旧的位置参数调用仍然有效。"""
     yield get_view_state("处理中……", busy=True)
+    if action in DOCK_ACTIONS or action == "close_tutor":
+        message = _dock_action(action)
+        yield get_view_state(message)
+        return
     message, clear = "就绪", False
     record_count = len(session["records"]) if session is not None else 0
     try:
@@ -2205,12 +2253,6 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
             message = submit_summary_text(conclusion if conclusion is not None else text)
         elif action == "submit":
             message = submit_response(text)
-        elif action == "open_tutor":
-            _open_tutor()
-            message = "实验助教已打开。写好问题再发送。"
-        elif action == "close_tutor":
-            session["_tutor_open"] = False
-            message = "已收起实验助教。"
         elif action == "cite_case":
             _remember_quote(_quote_case(case_id))
             message = "已把这次测量放进问题框。还没有发送。"
@@ -2249,7 +2291,7 @@ def handle(action, student_id, task_id, assembly, n_periods, distance_cm, text,
     finally:
         if action in ("submit", "ask", "judge", "explain", "summary") and session is not None:
             clear = any(e["type"] == "user" for e in session["records"][record_count:])
-        if session is not None and session.get("_tutor_open"):
+        if session is not None and DOCK["open"] and DOCK["tab"] == "tutor":
             session["_tutor_seen"] = sum(
                 1 for event in session["records"] if event.get("type") in ("assistant", "model_error"))
         if clear and session is not None:
