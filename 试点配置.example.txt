@@ -1,11 +1,19 @@
 # 复制本文件为 试点配置.txt，再改课程码。试点配置.txt 已被 git 忽略。
 # 课程码请用英文和数字。不要把 API key、真实名单写进这个文件。
 # API key 仍放在 填写密钥.txt。
+# 组网、名单格式、防火墙和排错见 docs/试点运行手册.md。
 PILOT_MODE=1
 APP_HOST=0.0.0.0
 APP_PORT=7862
 COURSE_CODE=change-me
 ROSTER_FILE=名单.csv
+# 可选：AI 限额和线程池
 AI_RATE_LIMIT_PER_MIN=6
 AI_DRAFT_LIMIT_PER_DAY=3
 AI_POOL_WORKERS=6
+# 可选：登录失败限速（默认每个学号 8 次、全班 60 次、窗口 10 分钟）
+# LOGIN_FAILS_PER_ID=8
+# LOGIN_FAILS_GLOBAL=60
+# LOGIN_WINDOW_SECONDS=600
+# 可选：会话签名密钥；不填会自动生成 .pilot/session_secret
+# SESSION_SECRET=请换成一串随机字符
