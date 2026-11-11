@@ -1,0 +1,11 @@
+# 复制本文件为 试点配置.txt，再改课程码。试点配置.txt 已被 git 忽略。
+# 课程码请用英文和数字。不要把 API key、真实名单写进这个文件。
+# API key 仍放在 填写密钥.txt。
+PILOT_MODE=1
+APP_HOST=0.0.0.0
+APP_PORT=7862
+COURSE_CODE=change-me
+ROSTER_FILE=名单.csv
+AI_RATE_LIMIT_PER_MIN=6
+AI_DRAFT_LIMIT_PER_DAY=3
+AI_POOL_WORKERS=6

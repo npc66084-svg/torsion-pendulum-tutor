@@ -69,6 +69,8 @@ import contextvars
 import threading
 
 from session_registry import KICK_REASON, SessionRegistry
+import pilot_ai
+import pilot_auth
 
 _NO_TOKEN = object()
 _ACTIVE = contextvars.ContextVar("torsion_active_user", default=None)
@@ -146,6 +148,14 @@ def _clear_context(ctx):
     ctx.params.update(DEFAULTS)
     ctx.dock["open"] = False
     ctx.dock["tab"] = "guide"
+
+
+def _ai(kind, fn, *args, **kwargs):
+    """试点请求走线程池和限流。没有试点上下文时保持原来的同步调用和超时。"""
+    if not pilot_mode() or _ACTIVE.get() is None:
+        return fn(*args, **kwargs)
+    current = _session() or {}
+    return pilot_ai.run(str(current.get("student_id") or ""), kind, fn, *args, **kwargs)
 
 
 
@@ -1473,7 +1483,7 @@ def submit_response(text):
         return "判断已记下。"
     _session()["explanation_submitted" if input_kind == "解释" else "summary_submitted"] = True
     save_session(_session())
-    ask_agent(_session(), _params(), MATERIALS, execute_tool, request_id)
+    _ai("ask", ask_agent, _session(), _params(), MATERIALS, execute_tool, request_id)
     return "已记下。"
 
 
@@ -1493,7 +1503,7 @@ def submit_explanation(text):
     if _session()["stage"] in ("predict", "experiment"):
         _session()["stage"] = "explain"
     save_session(_session())
-    ask_agent(_session(), _params(), MATERIALS, execute_tool, request_id)
+    _ai("ask", ask_agent, _session(), _params(), MATERIALS, execute_tool, request_id)
     return "解释已记下。"
 
 
@@ -1502,7 +1512,7 @@ def submit_summary_text(text):
     request_id = record_student_input(text.strip(), "总结")
     _session().update(stage="summary", summary_submitted=True)
     save_session(_session())
-    ask_agent(_session(), _params(), MATERIALS, execute_tool, request_id)
+    _ai("ask", ask_agent, _session(), _params(), MATERIALS, execute_tool, request_id)
     return "总结已记下。"
 
 
@@ -1515,7 +1525,8 @@ def ask_question(text, is_hint=False):
         _session()["hint_count"] += 1
     request_id = record_student_input(text.strip(), "提示" if is_hint else "问题")
     save_session(_session())
-    ask_agent(_session(), _params(), MATERIALS, execute_tool, request_id, selection=selection)
+    _ai("ask", ask_agent, _session(), _params(), MATERIALS, execute_tool, request_id,
+        selection=selection)
     return "已记下。"
 
 
@@ -1833,7 +1844,7 @@ def _make_draft():
     if not active_measurements(_session(), current_origin(_session())):
         raise ValueError("先测量或录入当前来源的数据，再生成总结草稿。")
     _open_tutor()
-    draft_agent(_session(), _draft_packet(), uuid4().hex[:12])
+    _ai("draft", draft_agent, _session(), _draft_packet(), uuid4().hex[:12])
     return "总结草稿在实验助教里，没有写入结论框。"
 
 
@@ -2069,8 +2080,8 @@ def _handle_impl(action, student_id, task_id, assembly, n_periods, distance_cm, 
             if not last:
                 raise ValueError("先点「核对结果」，再请 AI 解释。")
             _open_tutor()
-            review_agent(_session(), "阶段1 标定", _check_packet(last, state, state["mode"]),
-                         uuid4().hex[:12])
+            _ai("review", review_agent, _session(), "阶段1 标定",
+                _check_packet(last, state, state["mode"]), uuid4().hex[:12])
             message = "AI 解释已发到实验助教。"
         elif action == "add_shp_group":
             condition = shp_condition or stages.SHAPE_CONDITIONS[0]
@@ -2099,8 +2110,8 @@ def _handle_impl(action, student_id, task_id, assembly, n_periods, distance_cm, 
             if not last:
                 raise ValueError("先点「核对结果」，再请 AI 解释。")
             _open_tutor()
-            review_agent(_session(), "阶段2 规则刚体", _check_packet(last, state, state["mode"]),
-                         uuid4().hex[:12])
+            _ai("review", review_agent, _session(), "阶段2 规则刚体",
+                _check_packet(last, state, state["mode"]), uuid4().hex[:12])
             message = "AI 解释已发到实验助教。"
         elif action == "save_shp_answers":
             append_event(_session(), "stage_answers", "student", mode=state["mode"],
@@ -2108,8 +2119,8 @@ def _handle_impl(action, student_id, task_id, assembly, n_periods, distance_cm, 
             message = "阶段2 回答已记录。"
         elif action == "review_shp_answers":
             data = stages.stage(state, state["mode"], "shapes")
-            feedback = answer_agent(
-                _session(), "阶段2 规则刚体", stages.questions_for("shapes"),
+            feedback = _ai(
+                "answer", answer_agent, _session(), "阶段2 规则刚体", stages.questions_for("shapes"),
                 data["answers"],
                 {"student_results": data["results"],
                  "checks_passed": [bool(item.get("passed"))
@@ -2146,8 +2157,8 @@ def _handle_impl(action, student_id, task_id, assembly, n_periods, distance_cm, 
             if not last:
                 raise ValueError("先点「核对结果」，再请 AI 解释。")
             _open_tutor()
-            review_agent(_session(), "阶段3 平行轴", _check_packet(last, state, state["mode"]),
-                         uuid4().hex[:12])
+            _ai("review", review_agent, _session(), "阶段3 平行轴",
+                _check_packet(last, state, state["mode"]), uuid4().hex[:12])
             message = "AI 解释已发到实验助教。"
         elif action == "save_par_answers":
             append_event(_session(), "stage_answers", "student", mode=state["mode"],
@@ -2155,8 +2166,8 @@ def _handle_impl(action, student_id, task_id, assembly, n_periods, distance_cm, 
             message = "阶段3 回答已记录。"
         elif action == "review_par_answers":
             data = stages.stage(state, state["mode"], "parallel")
-            feedback = answer_agent(
-                _session(), "阶段3 平行轴", stages.questions_for("parallel"),
+            feedback = _ai(
+                "answer", answer_agent, _session(), "阶段3 平行轴", stages.questions_for("parallel"),
                 data["answers"],
                 {"student_results": data["results"],
                  "checks_passed": [bool(item.get("passed"))
@@ -2239,8 +2250,8 @@ def _handle_impl(action, student_id, task_id, assembly, n_periods, distance_cm, 
             message = "已生成图表。"
         elif action == "generate_summary":
             data = stages.ensure_stages(state, state["mode"])
-            text = summary_agent(_session(), _summary_packet(state, state["mode"]),
-                                 uuid4().hex[:12])
+            text = _ai("summary", summary_agent, _session(), _summary_packet(state, state["mode"]),
+                       uuid4().hex[:12])
             data["summary"]["text"] = text
             append_event(_session(), "stage_summary", "student", mode=state["mode"],
                          exp_stage="summary")
@@ -2405,7 +2416,7 @@ def open_browser(session_token):
         _ACTIVE.reset(marker)
 
 
-def handle(*args, session_token=_NO_TOKEN, **kwargs):
+def handle(*args, session_token=_NO_TOKEN, course_code=None, pin=None, **kwargs):
     """界面入口。不传 session_token 时仍走单机全局槽，供现有测试和 PILOT_MODE=0 使用。"""
     if not pilot_mode() or session_token is _NO_TOKEN:
         yield from _handle_impl(*args, **kwargs)
@@ -2423,6 +2434,16 @@ def handle(*args, session_token=_NO_TOKEN, **kwargs):
                 state["session_token"] = ctx.public_token
                 yield state
                 return
+            if args and args[0] in ("start", "seed_demo") and _session() is None:
+                student_key = "000000" if args[0] == "seed_demo" else args[1]
+                try:
+                    pilot_auth.authorize(student_key, course_code, pin)
+                except pilot_auth.AuthError as exc:
+                    state = get_view_state(str(exc))
+                    registry.issue(ctx)
+                    state["session_token"] = ctx.public_token
+                    yield state
+                    return
             for view in _handle_impl(*args, **kwargs):
                 registry.issue(ctx)
                 view["session_token"] = ctx.public_token

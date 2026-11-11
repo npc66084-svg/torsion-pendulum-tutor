@@ -10,6 +10,9 @@ env/
 records/
 .pilot/
 填写密钥.txt
+试点配置.txt
+名单.csv
+备份/
 .env
 .env.*
 *.log

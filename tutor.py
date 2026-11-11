@@ -255,7 +255,7 @@ REVIEW_RULES = """你是扭摆实验的计算检查员。用户会给你一份�
 """
 
 
-def review_agent(session, stage_label, packet, request_id):
+def review_agent(session, stage_label, packet, request_id, *, timeout=20, max_retries=0):
     """阶段计算检查的 AI 反馈。不给标准数值，不调用工具。"""
     model, key = os.getenv("TUTOR_MODEL", ""), os.getenv("OPENAI_API_KEY", "")
     if not model or not key:
@@ -272,7 +272,7 @@ def review_agent(session, stage_label, packet, request_id):
     try:
         base_url = os.getenv("OPENAI_BASE_URL") or None
         options = request_options(base_url)
-        with OpenAI(api_key=key, base_url=base_url, timeout=20, max_retries=0) as client:
+        with OpenAI(api_key=key, base_url=base_url, timeout=timeout, max_retries=max_retries) as client:
             response = client.chat.completions.create(model=model, messages=messages, **options)
             body = (response.choices[0].message.content or "").strip() or "这次没有得到文字反馈。"
     except OpenAIError as exc:
@@ -304,7 +304,8 @@ ANSWER_RULES = """你是大学物理实验助教。学生做了阶段2/3 的概�
 """
 
 
-def answer_agent(session, stage_label, questions, answers, packet, request_id):
+def answer_agent(session, stage_label, questions, answers, packet, request_id, *,
+                 timeout=20, max_retries=0):
     model, key = os.getenv("TUTOR_MODEL", ""), os.getenv("OPENAI_API_KEY", "")
     if not model or not key:
         text = "AI 尚未配置：回答已保存，配置模型后才能批改。"
@@ -325,7 +326,7 @@ def answer_agent(session, stage_label, questions, answers, packet, request_id):
     try:
         base_url = os.getenv("OPENAI_BASE_URL") or None
         options = request_options(base_url)
-        with OpenAI(api_key=key, base_url=base_url, timeout=20, max_retries=0) as client:
+        with OpenAI(api_key=key, base_url=base_url, timeout=timeout, max_retries=max_retries) as client:
             response = client.chat.completions.create(model=model, messages=messages, **options)
             body = (response.choices[0].message.content or "").strip() or "这次没有得到批改文字。"
     except OpenAIError as exc:
@@ -369,7 +370,7 @@ SUMMARY_RULES = """你是大学物理实验助教。根据学生记录，直接�
 """
 
 
-def summary_agent(session, packet, request_id):
+def summary_agent(session, packet, request_id, *, timeout=20, max_retries=0):
     model, key = os.getenv("TUTOR_MODEL", ""), os.getenv("OPENAI_API_KEY", "")
     if not model or not key:
         text = ("AI 尚未配置：阶段数据已记录，图表仍可查看。"
@@ -385,7 +386,7 @@ def summary_agent(session, packet, request_id):
     try:
         base_url = os.getenv("OPENAI_BASE_URL") or None
         options = request_options(base_url)
-        with OpenAI(api_key=key, base_url=base_url, timeout=20, max_retries=0) as client:
+        with OpenAI(api_key=key, base_url=base_url, timeout=timeout, max_retries=max_retries) as client:
             response = client.chat.completions.create(model=model, messages=messages, **options)
             body = (response.choices[0].message.content or "").strip() or "这次没有得到总结文字。"
     except OpenAIError as exc:
@@ -402,7 +403,7 @@ def summary_agent(session, packet, request_id):
     return text
 
 
-def draft_agent(session, packet, request_id):
+def draft_agent(session, packet, request_id, *, timeout=20, max_retries=0):
     """整理当前来源的记录。不提供测量和核对工具，也不改学生的结论。"""
     model, key = os.getenv("TUTOR_MODEL", ""), os.getenv("OPENAI_API_KEY", "")
     if not model or not key:
@@ -419,7 +420,7 @@ def draft_agent(session, packet, request_id):
     try:
         base_url = os.getenv("OPENAI_BASE_URL") or None
         options = request_options(base_url)
-        with OpenAI(api_key=key, base_url=base_url, timeout=20, max_retries=0) as client:
+        with OpenAI(api_key=key, base_url=base_url, timeout=timeout, max_retries=max_retries) as client:
             response = client.chat.completions.create(model=model, messages=messages, **options)
             body = (response.choices[0].message.content or "").strip() or "这次没有得到草稿文字。"
     except OpenAIError as exc:
@@ -436,7 +437,8 @@ def draft_agent(session, packet, request_id):
     return text
 
 
-def ask_agent(session, params, materials, execute_tool, request_id, selection=None):
+def ask_agent(session, params, materials, execute_tool, request_id, selection=None, *,
+              timeout=60, max_retries=0):
     model, key = os.getenv("TUTOR_MODEL", ""), os.getenv("OPENAI_API_KEY", "")
     if not model or not key:
         text = "AI 尚未配置：请设置 TUTOR_MODEL 和 OPENAI_API_KEY。按钮测量和核对仍可使用。"
@@ -456,10 +458,10 @@ def ask_agent(session, params, materials, execute_tool, request_id, selection=No
     definitions = [t for t in TOOLS if t["function"]["name"] in allowed_tools(session)]
     count = 0
     try:
-        # 不自动重试 API，避免等待过长和重复请求；工具错误在下方单独反馈。
+        # 默认不自动重试，避免单机等待过长。试点调用会传入 max_retries=1。工具错误在下方单独反馈。
         base_url = os.getenv("OPENAI_BASE_URL") or None
         with OpenAI(api_key=key, base_url=base_url,
-                    timeout=60, max_retries=0) as client:
+                    timeout=timeout, max_retries=max_retries) as client:
             for _ in range(MAX_CALLS + 1):
                 options = request_options(base_url)
                 if definitions:

@@ -1407,12 +1407,22 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
                     student = gr.Textbox(
                         label="学号", placeholder="例如 20260001", elem_id="student-id",
                         info="1～24 位数字；只用于保存记录，不发给 AI。")
+                    course_code = gr.Textbox(
+                        label="课程码", placeholder="教师课堂上发放", elem_id="course-code",
+                        type="password",
+                        info="只在这台主机核对，不会写入记录，也不会发给 AI。") if pilot else None
+                    pin = gr.Textbox(
+                        label="个人识别码", placeholder="名单里没有则可留空", elem_id="student-pin",
+                        type="password",
+                        info="教师名单里这一行写了识别码时才需要填写。") if pilot else None
                     start = gr.Button("开始学习", variant="primary", elem_id="start-learning")
                     with gr.Column(elem_id="demo-row"):
                         demo_button = gr.Button("载入完整演示数据", variant="secondary",
                                                 elem_id="demo-start")
-                        demo_note = md("想直接验收？点上面的按钮，会创建一个所有阶段都填好的演示会话。",
-                                       elem_id="demo-note")
+                        demo_text = "想直接验收？点上面的按钮，会创建一个所有阶段都填好的演示会话。"
+                        if pilot:
+                            demo_text += "演示学号是 000000，也要在名单里；若该行有识别码，请填在上面。"
+                        demo_note = md(demo_text, elem_id="demo-note")
                     md("第一次用？打开「使用指南」，3 分钟上手随时可以重新打开。",
                        elem_id="landing-guide-note")
                     with gr.Row(elem_id="landing-help-row"):
@@ -1888,6 +1898,8 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
         })
         if pilot:
             controls["session_token"] = session_token
+            controls["course_code"] = course_code
+            controls["pin"] = pin
 
         outputs = [
             landing, app_bar, mode_row, stage_row, page_row,
@@ -1929,8 +1941,9 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
 
         def on_event(*args):
             if pilot:
-                token, event_args = args[0], args[1:]
-                for view in handle(*event_args, session_token=token):
+                token, code, student_pin, event_args = args[0], args[1], args[2], args[3:]
+                for view in handle(*event_args, session_token=token,
+                                   course_code=code, pin=student_pin):
                     yield render_view(view, controls)
             else:
                 for view in handle(*args):
@@ -1939,7 +1952,7 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
         def bind(component, action, event="click"):
             inputs = []
             if pilot:
-                inputs.append(session_token)
+                inputs.extend([session_token, course_code, pin])
             inputs.extend([
                 gr.State(action), student, gr.State("calibrate"), gr.State(None),
                 gr.State(10), gr.State(0), ask_box, gr.State("same"),

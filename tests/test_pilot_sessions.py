@@ -1,17 +1,34 @@
-"""试点多会话：隔离、刷新恢复、重复登录。不请求真实模型。"""
+"""试点多会话：隔离、刷新恢复、重复登录、课程码和名单。不请求真实模型。"""
+import os
 import shutil
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import app
+import pilot_ai
+import pilot_auth
 import ui
 from session_registry import KICK_REASON
 
 
 ROOT = Path(__file__).resolve().parents[1]
+COURSE_CODE = "pilot-test-code"
+ROSTER_IDS = (
+    "10001", "10002", "10003", "20002", "30003", "30004", "40004",
+    "50001", "50002", "50003", "000000",
+)
+
+
+def write_roster(path, student_ids, pins=None):
+    pins = pins or {}
+    lines = ["student_id,name,pin"]
+    for student_id in student_ids:
+        lines.append(f"{student_id},示例,{pins.get(student_id, '')}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 @pytest.fixture
@@ -24,12 +41,18 @@ def project(tmp_path, monkeypatch):
     saved = (app.session, app.params.copy(), dict(app.DOCK), app.PROJECT)
     monkeypatch.setattr(app, "PROJECT", root)
     monkeypatch.setenv("PILOT_MODE", "1")
+    monkeypatch.setenv("COURSE_CODE", COURSE_CODE)
+    roster = root / "roster.csv"
+    write_roster(roster, ROSTER_IDS)
+    monkeypatch.setenv("ROSTER_FILE", str(roster))
     app.session = None
     app.params.clear()
     app.params.update(app.DEFAULTS)
     app.DOCK["open"] = False
     app.DOCK["tab"] = "guide"
     app.reset_registry()
+    pilot_auth.reset()
+    pilot_ai.reset()
     yield root
     app.session = saved[0]
     app.params.clear()
@@ -38,12 +61,17 @@ def project(tmp_path, monkeypatch):
     app.DOCK.update(saved[2])
     monkeypatch.setattr(app, "PROJECT", saved[3])
     app.reset_registry()
+    pilot_auth.reset()
+    pilot_ai.reset()
 
 
-def drive(action, student_id, token="", send_token=True, **kwargs):
+def drive(action, student_id, token="", send_token=True, course_code=None, pin="", **kwargs):
     args = (action, student_id, "calibrate", None, 10, 0, "")
     if send_token:
-        views = list(app.handle(*args, session_token=token, **kwargs))
+        if course_code is None:
+            course_code = os.environ.get("COURSE_CODE", "")
+        views = list(app.handle(
+            *args, session_token=token, course_code=course_code, pin=pin, **kwargs))
     else:
         views = list(app.handle(*args, **kwargs))
     return views[-1]
@@ -237,5 +265,148 @@ def test_single_ui_has_no_token_component():
     demo, controls = ui.build_ui(app.handle, app.get_view_state)
     try:
         assert "session_token" not in controls
+        assert "course_code" not in controls
+        assert "pin" not in controls
     finally:
         demo.close()
+
+
+def test_pilot_ui_asks_for_course_code():
+    demo, controls = ui.build_ui(
+        app.handle, app.get_view_state, pilot=True, open_browser=app.open_browser)
+    try:
+        assert "session_token" in controls
+        assert "course_code" in controls
+        assert "pin" in controls
+    finally:
+        demo.close()
+
+
+def test_wrong_course_code_and_missing_roster_are_rejected(project, monkeypatch):
+    wrong = drive("start", "10001", course_code="not-the-code")
+    assert not wrong["active"]
+    assert "课程码不正确" in wrong["status"]
+    assert "not-the-code" not in wrong["status"]
+    assert COURSE_CODE not in wrong["status"]
+    assert not (project / "records").exists() or not any((project / "records").rglob("session_*.json"))
+
+    monkeypatch.delenv("COURSE_CODE")
+    missing = drive("start", "10001", course_code="not-the-code")
+    assert "没有配置课程码" in missing["status"]
+
+    monkeypatch.setenv("COURSE_CODE", COURSE_CODE)
+    monkeypatch.delenv("ROSTER_FILE")
+    no_roster = drive("start", "10001")
+    assert "没有配置名单" in no_roster["status"]
+
+
+def test_unknown_student_and_bad_pin_are_rejected(project):
+    absent = drive("start", "19999")
+    assert not absent["active"]
+    assert "不在本次课程名单" in absent["status"]
+    assert not (project / "records" / "19999").exists()
+
+    roster = project / "roster.csv"
+    write_roster(roster, (*ROSTER_IDS, "10021"), pins={"10021": "2468"})
+    blank = drive("start", "10021", pin="")
+    assert "请填写个人识别码" in blank["status"]
+    mismatch = drive("start", "10021", pin="0000")
+    assert "个人识别码不正确" in mismatch["status"]
+    assert "2468" not in mismatch["status"]
+    assert not mismatch["active"]
+    matched = drive("start", "10021", pin="2468")
+    assert matched["active"] and "10021" in matched["save_line"]
+
+
+def test_roster_reload_and_demo_student(project):
+    roster = project / "roster.csv"
+    original = roster.read_text(encoding="utf-8")
+    roster.write_text(original.replace("10001,示例,\n", ""), encoding="utf-8")
+    blocked = drive("start", "10001")
+    assert "不在本次课程名单" in blocked["status"]
+    roster.write_text(original, encoding="utf-8")
+    allowed = drive("start", "10001")
+    assert allowed["active"] and "10001" in allowed["save_line"]
+
+    demo = drive("seed_demo", "19999")
+    assert demo["active"] and "000000" in demo["save_line"]
+    assert "19999" not in demo["save_line"]
+
+
+def test_login_failures_are_rate_limited(project, monkeypatch):
+    monkeypatch.setenv("LOGIN_FAILS_PER_ID", "3")
+    pilot_auth.reset()
+    last = None
+    for _ in range(3):
+        last = drive("start", "10001", course_code="nope")
+    assert "尝试次数过多" in last["status"]
+    blocked = drive("start", "10001")
+    assert not blocked["active"]
+    assert "尝试次数过多" in blocked["status"]
+    assert not (project / "records" / "10001").exists()
+
+    monkeypatch.setenv("LOGIN_FAILS_GLOBAL", "3")
+    monkeypatch.setenv("LOGIN_FAILS_PER_ID", "8")
+    pilot_auth.reset()
+    for student_id in ("81001", "81002", "81003"):
+        drive("start", student_id, course_code="nope")
+    locked = drive("start", "10002")
+    assert "尝试次数过多" in locked["status"] and not locked["active"]
+
+
+def test_login_lock_expires(project, monkeypatch):
+    monkeypatch.setenv("LOGIN_FAILS_PER_ID", "2")
+    pilot_auth.reset()
+    with pytest.raises(pilot_auth.AuthError, match="课程码不正确"):
+        pilot_auth.authorize("10001", "nope", "", now=1_000_000)
+    with pytest.raises(pilot_auth.AuthError, match="尝试次数过多"):
+        pilot_auth.authorize("10001", "nope", "", now=1_000_001)
+    pilot_auth.authorize("10001", COURSE_CODE, "", now=1_000_001 + 601)
+
+
+def test_pilot_off_ignores_course_code(project, monkeypatch):
+    monkeypatch.setenv("PILOT_MODE", "0")
+    view = drive("start", "10001", send_token=False)
+    assert view["active"] and "session_token" not in view
+    assert app.session["student_id"] == "10001"
+
+
+def test_concurrent_classes_do_not_cross_notes(project):
+    """软件能做的压测：10、20、30 个学生同时开始并各存一条备注。不是教室里的浏览器。"""
+    timings = []
+    for count, base in ((10, 91_000_000), (20, 92_000_000), (30, 93_000_000)):
+        student_ids = [str(base + index) for index in range(count)]
+        write_roster(project / "roster.csv", student_ids)
+        done = {}
+        errors = []
+
+        def worker(student_id):
+            try:
+                started = drive("start", student_id)
+                if not started["active"]:
+                    raise AssertionError(started["status"])
+                filled = drive(
+                    "save_param", student_id, started["session_token"],
+                    p_n="10", p_angle="60", p_timer="0.001", p_balance="0.1",
+                    p_caliper="0.02", p_ruler="1.0", p_note=f"load-{student_id}")
+                done[student_id] = filled
+            except Exception as exc:
+                errors.append((student_id, exc))
+
+        started_at = time.perf_counter()
+        threads = [threading.Thread(target=worker, args=(student_id,)) for student_id in student_ids]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        timings.append((count, round(time.perf_counter() - started_at, 3)))
+        assert errors == []
+        for student_id in student_ids:
+            saved = list((project / "records" / student_id).glob("session_*.json"))
+            assert len(saved) == 1
+            text = saved[0].read_text(encoding="utf-8")
+            assert f"load-{student_id}" in text
+            for other in student_ids:
+                if other != student_id:
+                    assert f"load-{other}" not in text
+    print("LOAD_TIMINGS", timings)
