@@ -164,7 +164,10 @@ def main():
     assert "$" not in ui.MANUAL.replace("$$", "") and "620.0" in ui.MANUAL
     assert "金属圆筒" in ui.MANUAL and "内径" in ui.MANUAL and "0.032" not in ui.MANUAL
     assert "## 工具结果" not in ui.MANUAL
-    demo, controls = ui.build_ui(app.handle, app.get_view_state)
+    demo, controls = ui.build_ui(
+        app.handle, app.get_view_state,
+        pilot=app.pilot_mode(),
+        open_browser=app.open_browser if app.pilot_mode() else None)
     assert "secondary" not in controls
     markdowns = [block for block in demo.blocks.values() if isinstance(block, gr.Markdown)]
     assert markdowns and all(
@@ -196,6 +199,14 @@ def main():
     assert before[controls["principle_launch"]]["visible"]
     assert not before[controls["tutor_launch"]]["visible"]
     assert "3 分钟上手" in ui.ONBOARDING_MD and "原理" in ui.PRINCIPLE
+    if app.pilot_mode():
+        err_view = app.get_view_state("课程码不正确")
+        err_view["pilot_error"] = "课程码不正确"
+        denied = ui.render_view(err_view, controls)
+        assert denied[controls["pilot_error"]]["visible"]
+        assert denied[controls["pilot_error"]]["value"] == "课程码不正确"
+        ok_view = ui.render_view(app.get_view_state(), controls)
+        assert not ok_view[controls["pilot_error"]]["visible"]
     landing_dock = list(scope["handle"](
         "open_guide", "20260001", "calibrate", "carrier", 10, 0, ""))[-1]
     assert landing_dock["tutor_open"] and landing_dock["dock_tab"] == "guide"

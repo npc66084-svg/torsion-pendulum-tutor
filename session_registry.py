@@ -198,7 +198,8 @@ class UserContext:
         self.kick_reason = ""
         self.last_active = time.time()
         self.public_token = ""
-        self.lock = threading.RLock()
+        # 普通 Lock：Gradio 可能在不同线程推进同一个生成器，RLock 不能跨线程释放。
+        self.lock = threading.Lock()
 
 
 class SessionRegistry:

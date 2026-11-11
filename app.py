@@ -928,12 +928,16 @@ def _safe_stage_text(function, *args):
         return f"**还不能计算：** {exc}"
 
 
+_NO_PARAM_HINT = "**先保存一个参数版本，才能预览计算结果。**"
+
+
 def _stage_view():
     state = _experiment_state()
     mode = state["mode"]
     exp_stage = state["stage"]
     data = stages.ensure_stages(state, mode)
     params = experiment.active_param(state, mode)
+    missing_params = params is None
     calibration = data["calibrate"]
     shapes = data["shapes"]
     parallel = data["parallel"]
@@ -962,9 +966,12 @@ def _stage_view():
                 errors=stages.parallel_uncertainties(
                     state, mode, params, parallel["results"]))
             if exp_stage == experiment.STAGE_PARALLEL
+            and params is not None
             and (_session() or {}).get("_par_show") else None),
         cal_groups_md=_safe_stage_text(stages.groups_md, state, mode, "calibrate"),
-        cal_preview_md=_safe_stage_text(stages.calibration_preview, state, mode, params),
+        cal_preview_md=(
+            _NO_PARAM_HINT if missing_params else
+            _safe_stage_text(stages.calibration_preview, state, mode, params)),
         cal_i1=calibration["results"].get("I1", ""),
         cal_k=calibration["results"].get("K", ""),
         cal_i0=calibration["results"].get("I0", ""),
@@ -972,7 +979,9 @@ def _stage_view():
         cal_has_check=bool(calibration.get("last_check")),
         cal_group_choices=stages.group_choices(state, mode, "calibrate"),
         shp_groups_md=_safe_stage_text(stages.groups_md, state, mode, "shapes"),
-        shp_preview_md=_safe_stage_text(stages.shape_preview, state, mode, params),
+        shp_preview_md=(
+            _NO_PARAM_HINT if missing_params else
+            _safe_stage_text(stages.shape_preview, state, mode, params)),
         shp_check_md=shapes.get("last_check_md") or "填好表后点「核对结果」。",
         shp_has_check=bool(shapes.get("last_check")),
         shp_table=shape_rows,
@@ -982,7 +991,9 @@ def _stage_view():
         shp_answers_feedback=(shapes.get("answers_feedback") or ""),
         shp_group_choices=stages.group_choices(state, mode, "shapes"),
         par_groups_md=_safe_stage_text(stages.groups_md, state, mode, "parallel"),
-        par_preview_md=_safe_stage_text(stages.parallel_preview, state, mode, params),
+        par_preview_md=(
+            _NO_PARAM_HINT if missing_params else
+            _safe_stage_text(stages.parallel_preview, state, mode, params)),
         par_check_md=parallel.get("last_check_md") or "填好表后点「核对结果」。",
         par_has_check=bool(parallel.get("last_check")),
         par_table=parallel_rows,
@@ -1002,6 +1013,7 @@ def _stage_view():
             charts.shapes_figure(
                 shape_rows, stages.shape_uncertainties(state, mode, params))
             if exp_stage == experiment.STAGE_SUMMARY
+            and params is not None
             and (_session() or {}).get("_summary_show") else None),
         summary_parallel_figure=(
             charts.parallel_figure(
@@ -1009,6 +1021,7 @@ def _stage_view():
                 errors=stages.parallel_uncertainties(
                     state, mode, params, parallel["results"]))
             if exp_stage == experiment.STAGE_SUMMARY
+            and params is not None
             and (_session() or {}).get("_summary_show") else None),
         summary_table_md=_stage_summary_table(data),
     )
@@ -1209,6 +1222,7 @@ def get_view_state(message="就绪", busy=False, clear=False):
         correct_choices=correct_choices, correct_id=stored_correct,
         record_choices=record_choices, record_id=stored_record,
         tutor_open=tutor_open,
+        pilot_error=None,
         dock_tab=dock_tab,
         tutor_label="问助教 · 有新回复" if unread else "问助教",
         ask_draft=(_session() or {}).get("_ask_draft") or "" if active else "",
@@ -2390,16 +2404,31 @@ def _handle_impl(action, student_id, task_id, assembly, n_periods, distance_cm, 
                 1 for event in _session()["records"] if event.get("type") in ("assistant", "model_error"))
         if clear and _session() is not None:
             _session()["_ask_draft"] = ""
-        yield get_view_state(message, clear=clear)
+        view = get_view_state(message, clear=clear)
+        if action in ("start", "seed_demo") and _session() is None and message not in ("", "就绪"):
+            view["pilot_error"] = message
+        yield view
 
+
+
+def _view_with_context(ctx, message="就绪"):
+    """在 ctx 里取一次视图，set/reset 不跨 yield。"""
+    marker = _ACTIVE.set(ctx)
+    try:
+        return get_view_state(message)
+    finally:
+        _ACTIVE.reset(marker)
 
 
 def open_browser(session_token):
     """试点页面加载：按浏览器 token 找回会话。单机模式忽略 token。"""
     if not pilot_mode():
         return get_view_state()
-    registry = get_registry()
-    ctx = registry.resolve(session_token)
+    try:
+        registry = get_registry()
+        ctx = registry.resolve(session_token)
+    except Exception:
+        return get_view_state("会话恢复失败，请重新开始。")
     marker = _ACTIVE.set(ctx)
     try:
         with ctx.lock:
@@ -2423,33 +2452,42 @@ def handle(*args, session_token=_NO_TOKEN, course_code=None, pin=None, **kwargs)
         return
     registry = get_registry()
     ctx = registry.resolve(session_token)
-    marker = _ACTIVE.set(ctx)
-    try:
-        with ctx.lock:
-            registry.touch(ctx)
-            if ctx.kicked:
-                _clear_context(ctx)
-                state = get_view_state(ctx.kick_reason or KICK_REASON)
+    # 注意：不能把 _ACTIVE.set 的结果跨 yield 保存再 reset。
+    # Gradio 用 different Context 逐步推进生成器，旧 token 会在 finally 里报
+    # "was created in a different Context"。这里每一步单独 set/reset。
+    with ctx.lock:
+        registry.touch(ctx)
+        if ctx.kicked:
+            _clear_context(ctx)
+            state = _view_with_context(ctx, ctx.kick_reason or KICK_REASON)
+            state["pilot_error"] = ctx.kick_reason or KICK_REASON
+            registry.issue(ctx)
+            state["session_token"] = ctx.public_token
+            yield state
+            return
+        if args and args[0] in ("start", "seed_demo") and ctx.session is None:
+            student_key = "000000" if args[0] == "seed_demo" else args[1]
+            try:
+                pilot_auth.authorize(student_key, course_code, pin)
+            except pilot_auth.AuthError as exc:
+                state = _view_with_context(ctx, str(exc))
+                state["pilot_error"] = str(exc)
                 registry.issue(ctx)
                 state["session_token"] = ctx.public_token
                 yield state
                 return
-            if args and args[0] in ("start", "seed_demo") and _session() is None:
-                student_key = "000000" if args[0] == "seed_demo" else args[1]
-                try:
-                    pilot_auth.authorize(student_key, course_code, pin)
-                except pilot_auth.AuthError as exc:
-                    state = get_view_state(str(exc))
-                    registry.issue(ctx)
-                    state["session_token"] = ctx.public_token
-                    yield state
-                    return
-            for view in _handle_impl(*args, **kwargs):
-                registry.issue(ctx)
-                view["session_token"] = ctx.public_token
-                yield view
-    finally:
-        _ACTIVE.reset(marker)
+        iterator = _handle_impl(*args, **kwargs)
+        while True:
+            marker = _ACTIVE.set(ctx)
+            try:
+                view = next(iterator)
+            except StopIteration:
+                break
+            finally:
+                _ACTIVE.reset(marker)
+            registry.issue(ctx)
+            view["session_token"] = ctx.public_token
+            yield view
 
 
 

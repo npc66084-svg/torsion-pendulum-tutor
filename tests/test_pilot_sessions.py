@@ -139,6 +139,20 @@ def test_refresh_restores_after_registry_loss(project):
     assert restored["tutor_open"] and restored["dock_tab"] == "guide"
 
 
+def test_group_without_param_version_does_not_crash(project):
+    """有标定组但还没保存参数版本时，预览应提示而不是抛 AttributeError。"""
+    started = drive("start", "10001")
+    token = started["session_token"]
+    drive("set_exp_stage", "10001", token, exp_stage_choice="calibrate")
+    added = drive("add_cal_group", "10001", token,
+                  cal_n="10", cal_t0="12.50", cal_t1="13.50", cal_note="no-param")
+    assert "no-param" in added["cal_groups_md"]
+    assert "先保存一个参数版本" in added["cal_preview_md"]
+    restored = drive("open_guide", "10001", token)
+    assert restored["active"]
+    assert "先保存一个参数版本" in restored["cal_preview_md"]
+
+
 def test_second_window_kicks_the_first(project):
     first = drive("start", "30003")
     first_token = first["session_token"]

@@ -29,3 +29,5 @@ jobs:
         run: python tests/smoke_check.py
         env:
           PILOT_MODE: "1"
+          COURSE_CODE: "TEST2026"
+          ROSTER_FILE: "docs/名单示例.csv"

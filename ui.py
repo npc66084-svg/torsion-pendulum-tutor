@@ -881,6 +881,15 @@ body { overflow-x: hidden; }
     color: rgba(243, 234, 217, 0.5) !important; }
 #landing-guide-note p { margin: 12px 0 0; font-size: 12px; line-height: 1.6;
     text-align: center; color: rgba(243, 234, 217, 0.55) !important; }
+#pilot-error { margin: 8px 0 0 !important; }
+#pilot-resume { display: none !important; }
+#pilot-error p {
+    margin: 0; padding: 8px 10px; border-radius: 10px;
+    background: rgba(255, 120, 100, 0.12);
+    border: 1px solid rgba(255, 150, 130, 0.35);
+    font-size: 13px; line-height: 1.6; font-weight: 600;
+    color: #ffc4b4 !important;
+}
 #landing-help-row { display: none !important; gap: 8px !important; margin-top: 10px; }
 #landing-help-row button {
     flex: 1 1 0 !important; border-radius: 999px !important;
@@ -1384,6 +1393,11 @@ def render_view(state, controls):
                                            interactive=ready and state["can_edit_params"])
     if "session_token" in controls and "session_token" in state:
         updates[controls["session_token"]] = state["session_token"]
+    if "pilot_error" in controls:
+        message = state.get("pilot_error") or ""
+        show = (not active) and bool(message)
+        updates[controls["pilot_error"]] = gr.update(
+            value=message if show else "", visible=show)
     return updates
 
 
@@ -1415,6 +1429,7 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
                         label="个人识别码", placeholder="名单里没有则可留空", elem_id="student-pin",
                         type="password",
                         info="教师名单里这一行写了识别码时才需要填写。") if pilot else None
+                    pilot_error = md("", elem_id="pilot-error", visible=False) if pilot else None
                     start = gr.Button("开始学习", variant="primary", elem_id="start-learning")
                     with gr.Column(elem_id="demo-row"):
                         demo_button = gr.Button("载入完整演示数据", variant="secondary",
@@ -1900,6 +1915,7 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
             controls["session_token"] = session_token
             controls["course_code"] = course_code
             controls["pin"] = pin
+            controls["pilot_error"] = pilot_error
 
         outputs = [
             landing, app_bar, mode_row, stage_row, page_row,
@@ -1937,7 +1953,7 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
             *[param_fields[key] for key in param_fields], p_note,
         ]
         if pilot:
-            outputs = [session_token, *outputs]
+            outputs = [session_token, pilot_error, *outputs]
 
         def on_event(*args):
             if pilot:
@@ -2027,10 +2043,24 @@ def build_ui(handle, get_view_state, pilot=False, open_browser=None):
         bind(stage, "set_exp_stage", event="input")
 
         if pilot:
-            def on_load(token):
+            def on_resume(token):
                 return render_view(open_browser(token), controls)
 
-            demo.load(on_load, inputs=[session_token], outputs=outputs, js=PAGE_JS,
+            def on_initial():
+                # 首次加载不碰 BrowserState：此时它可能还没从 localStorage 读出来，
+                # 一旦用空 token 回写就会把上次会话覆盖掉。恢复交给下面的隐藏按钮。
+                updates = render_view(get_view_state(), controls)
+                updates[session_token] = gr.update()
+                return updates
+
+            pilot_resume = gr.Button("恢复会话", elem_id="pilot-resume")
+            pilot_resume.click(fn=on_resume, inputs=[session_token], outputs=outputs,
+                               api_visibility="private", show_progress="hidden")
+            load_js = ("() => { (" + PAGE_JS + ")(); "
+                       "setTimeout(() => { const el = document.querySelector('#pilot-resume'); "
+                       "if (!el) return; const b = el.tagName === 'BUTTON' ? el : el.querySelector('button'); "
+                       "if (b) b.click(); }, 1400); }")
+            demo.load(on_initial, outputs=outputs, js=load_js,
                       api_visibility="private", show_progress="hidden")
         else:
             demo.load(lambda: render_view(get_view_state(), controls), outputs=outputs, js=PAGE_JS,
