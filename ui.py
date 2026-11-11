@@ -627,7 +627,7 @@ header.lab-head .chips span {
 }
 #tutor-dock, #tutor-dock.tutor-open {
     position: fixed !important; top: 12px; right: 12px; bottom: auto;
-    left: auto !important; width: min(430px, calc(100vw - 24px));
+    left: auto !important; width: min(470px, calc(100vw - 24px));
     min-width: 320px; max-width: calc(100vw - 24px);
     height: min(760px, calc(100vh - 24px)); min-height: 400px;
     max-height: calc(100vh - 24px);
@@ -688,7 +688,7 @@ header.lab-head .chips span {
     font-weight: 400; }
 #tutor-close { flex: 0 0 auto !important; width: auto !important; min-width: 64px; }
 body:has(#tutor-dock.tutor-open) .gradio-container {
-    padding-right: min(450px, 46vw); box-sizing: border-box;
+    padding-right: min(490px, 46vw); box-sizing: border-box;
 }
 body:has(#tutor-dock.tutor-open) .lab-head { grid-template-columns: 1fr; }
 body:has(#tutor-dock.tutor-open) .lab-head-art { display: none; }
@@ -1162,6 +1162,71 @@ CSS += """
     background: transparent !important;
 }
 #login-card .input-container { color: #f8f1e4 !important; }
+"""
+
+CSS += """
+/* ================= 工作台字号整体放大（仅桌面；开始页与手机保持原样） ================= */
+@media (min-width: 721px) {
+#app-bar, #mode-row, #stage-row, #stage-hint, #page-row {
+    --body-text-size: 19px;
+    --prose-text-size: 18px;
+    --block-label-text-size: 17px;
+    --block-info-text-size: 15px;
+    --input-text-size: 19px;
+    --button-medium-text-size: 17px;
+    --button-large-text-size: 19px;
+}
+/* 顶栏 */
+#app-bar { min-height: 76px; }
+.brand-text strong { font-size: 18px !important; }
+.brand-text small { font-size: 13.5px !important; }
+#save-line p { font-size: 16px !important; }
+#app-bar button { font-size: 17px !important; }
+/* 模式与阶段 */
+#mode-row { padding: 15px 20px !important; }
+#mode-select label { font-size: 17px !important; padding: 12px 18px !important; }
+#mode-note p { font-size: 15.5px !important; line-height: 1.7 !important; }
+#stage-select label { font-size: 16px !important; padding: 10px 15px !important; }
+#learning-status p { font-size: 15.5px !important; }
+#stage-hint p { font-size: 17px !important; line-height: 1.7 !important; }
+#mode-row span[data-testid="block-info"],
+#stage-row span[data-testid="block-info"] { font-size: 15.5px !important; }
+/* 区块标题与正文 */
+.section-head h3 { font-size: 31px !important; }
+.section-head p { font-size: 18.5px !important; line-height: 1.7 !important; }
+#page-row .prose p, #page-row .prose li { font-size: 18.5px !important; line-height: 1.7 !important; }
+#page-row .prose h3 { font-size: 22px !important; }
+#page-row .prose h2 { font-size: 24px !important; }
+#page-row .section-head h3 { font-size: 31px !important; }
+#page-row .section-head p { font-size: 18.5px !important; }
+/* 标签、说明、提示 */
+#page-row span[data-testid="block-info"] { font-size: 17px !important; }
+#page-row .info-text { font-size: 16px !important; line-height: 1.6 !important; }
+#param-preview p, #param-preview li { font-size: 18px !important; }
+#param-active p { font-size: 17.5px !important; }
+#stage-placeholder p, #stage-placeholder li { font-size: 18.5px !important; }
+/* 表格 */
+#page-row table { font-size: 16px !important; }
+#page-row table th { font-size: 15.5px !important; padding: 10px 12px !important; }
+#page-row table td { font-size: 16px !important; padding: 10px 12px !important; }
+/* 输入与按钮 */
+#page-row input, #page-row textarea { font-size: 19px !important; }
+#page-row textarea { padding: 12px 14px !important; }
+#page-row button { font-size: 19px !important; }
+#page-row .card { padding: 16px 18px 18px !important; }
+/* 下拉菜单（Gradio 会把选项挂在组件内） */
+.options .item, .option-list .item { font-size: 18px !important; }
+/* 帮助浮窗同步放大 */
+#tutor-dock { --chatbot-text-size: 21px; }
+#tutor-head h3 { font-size: 22px !important; }
+#tutor-dock #dock-sub p { font-size: 15px !important; }
+#tutor-dock #dock-tabs button { font-size: 15px !important; }
+#tutor-dock #dock-guide-md p, #tutor-dock #dock-guide-md li { font-size: 17px !important; }
+#tutor-dock #dock-principle-md p, #tutor-dock #dock-principle-md li { font-size: 16px !important; }
+#tutor-dock #dock-principle-md h2 { font-size: 19px !important; }
+#tutor-dock #dock-principle-md h1 { font-size: 22px !important; }
+#tutor-dock #ask-box textarea { font-size: 19px !important; }
+}
 """
 
 
